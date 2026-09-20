@@ -48,7 +48,7 @@ export function AuthPattern() {
       xml={xml}
       width="100%"
       height="100%"
-      style={StyleSheet.absoluteFillObject}
+      style={StyleSheet.absoluteFill}
       pointerEvents="none"
     />
   );
