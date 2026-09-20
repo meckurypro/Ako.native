@@ -1,5 +1,12 @@
 // File: screens/LoginScreen.tsx
 // (routed to via app/(auth)/login.tsx, which just re-exports this as the default)
+//
+// Ported from web's src/pages/auth/Login.tsx — same fields, same copy,
+// same error handling and add-account flow, restyled with RN's
+// components/theme tokens instead of Tailwind classes. See that file
+// for the reasoning behind each behavior (redirect param handling,
+// unconfirmed-email resend, generic incorrect-email-or-password
+// message, etc) — it's preserved verbatim here.
 import { useState } from "react";
 import {
   View,
@@ -10,26 +17,29 @@ import {
   ScrollView,
   StyleSheet,
 } from "react-native";
-import { Redirect, useRouter, useLocalSearchParams, Link } from "expo-router"; // FLAG: assumes Expo Router — swap for React Navigation calls if you're using that instead
-import { useAuth } from "../hooks/useAuth"; // FLAG: this hook needs its own RN pass — see note below
-import { supabase } from "../lib/supabase"; // FLAG: Supabase client needs AsyncStorage-based session storage on RN — see note below
-import { useAddAccount } from "../hooks/useAccountSwitcher"; // FLAG: not yet converted — port when you get to account switching
+import { Redirect, useRouter, useLocalSearchParams, Link } from "expo-router";
+import { useAuth } from "../hooks/useAuth";
+import { supabase } from "../lib/supabase";
+import { useAddAccount } from "../hooks/useAccountSwitcher";
+import { useTheme } from "../lib/theme";
 import { Wordmark } from "../components/Wordmark";
+import { AuthPattern } from "../components/AuthPattern";
 import { FormField } from "../components/FormField";
 import { PasswordField } from "../components/PasswordField";
 import { Button } from "../components/Button";
-// NOTE: AuthPattern (decorative background) intentionally dropped for
-// this first pass — it's a visual-only component; port it separately
-// once you've decided how you want background art handled on native.
 
 export function LoginScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { user, loading: authLoading } = useAuth();
   const params = useLocalSearchParams<{ redirect?: string; add?: string }>();
   const redirectTo =
     params.redirect && params.redirect.startsWith("/") && !params.redirect.startsWith("//")
       ? params.redirect
       : "/feed";
+  // ?add=1 — arrived here to sign into an ADDITIONAL personal account
+  // rather than replace the current one. See web's Login.tsx for the
+  // full rationale; behavior here matches it exactly.
   const addMode = params.add === "1";
   const addAccount = useAddAccount();
 
@@ -66,10 +76,15 @@ export function LoginScreen() {
     setLoading(false);
 
     if (signInError) {
+      // "Email not confirmed" is a distinct failure from a bad
+      // password/email — surface it separately rather than collapsing
+      // every error into the generic message below.
       if (signInError.message.toLowerCase().includes("email not confirmed")) {
         setUnconfirmed(true);
         setError("Confirm your email first. Check your inbox for the link we sent you.");
       } else {
+        // Generic message deliberately — don't reveal whether the email
+        // exists or the password was wrong.
         setError("Incorrect email or password.");
       }
       return;
@@ -89,77 +104,83 @@ export function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.wordmarkWrap}>
-          <Wordmark />
-        </View>
+    <View style={[styles.flex, { backgroundColor: colors.canvas }]}>
+      <AuthPattern />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.wordmarkWrap}>
+            <Wordmark />
+          </View>
 
-        {addMode && (
-          <Text style={styles.addModeText}>
-            Sign into another personal account. Your current account stays saved on this device —
-            switch back to it anytime.
-          </Text>
-        )}
-
-        <FormField
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          autoFocus
-        />
-        <PasswordField label="Password" value={password} onChangeText={setPassword} />
-
-        {error ? (
-          <Text style={styles.errorText} accessibilityRole="alert">
-            {error}
-          </Text>
-        ) : null}
-
-        {unconfirmed && (
-          <Pressable onPress={handleResend} disabled={resending} style={styles.resendLink}>
-            <Text style={styles.resendLinkText}>
-              {resending ? "Sending…" : resent ? "Link sent" : "Resend confirmation link"}
+          {addMode && (
+            <Text style={[styles.addModeText, { color: colors.inkMuted }]}>
+              Sign into another personal account. Your current account stays saved on this
+              device — switch back to it anytime.
             </Text>
-          </Pressable>
-        )}
+          )}
 
-        <Button onPress={handleSubmit} disabled={loading}>
-          {addMode ? "Add account" : "Log in"}
-        </Button>
+          <FormField
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoFocus
+          />
+          <PasswordField label="Password" value={password} onChangeText={setPassword} />
 
-        {!addMode && (
-          <Link href="/reset-password" style={styles.forgotLink}>
-            Forgot password?
-          </Link>
-        )}
+          {error ? (
+            <Text style={[styles.errorText, { color: colors.danger }]} accessibilityRole="alert">
+              {error}
+            </Text>
+          ) : null}
 
-        <View style={styles.signupRow}>
-          <Text style={styles.signupText}>New to Akọ? </Text>
-          <Link href={addMode ? "/signup?add=1" : "/signup"} style={styles.signupLink}>
-            Create an account
-          </Link>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {unconfirmed && (
+            <Pressable onPress={handleResend} disabled={resending} style={styles.resendLink}>
+              <Text style={[styles.resendLinkText, { color: colors.accent }]}>
+                {resending ? "Sending…" : resent ? "Link sent" : "Resend confirmation link"}
+              </Text>
+            </Pressable>
+          )}
+
+          <Button onPress={handleSubmit} disabled={loading} loading={loading}>
+            {addMode ? "Add account" : "Log in"}
+          </Button>
+
+          {!addMode && (
+            <Link href="/reset-password" style={[styles.forgotLink, { color: colors.accent }]}>
+              Forgot password?
+            </Link>
+          )}
+
+          <View style={styles.signupRow}>
+            <Text style={[styles.signupText, { color: colors.inkMuted }]}>New to Akọ? </Text>
+            <Link
+              href={addMode ? "/signup?add=1" : "/signup"}
+              style={[styles.signupLink, { color: colors.accent }]}
+            >
+              Create an account
+            </Link>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: "#FFFFFF" }, // canvas
+  flex: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24 },
   wordmarkWrap: { marginBottom: 40 },
-  addModeText: { textAlign: "center", fontSize: 14, color: "#6B7280", marginBottom: 24 },
-  errorText: { color: "#DC2626", fontSize: 14, marginBottom: 16 },
+  addModeText: { textAlign: "center", fontSize: 14, marginBottom: 24 },
+  errorText: { fontSize: 14, marginBottom: 16 },
   resendLink: { marginBottom: 16 },
-  resendLinkText: { fontSize: 14, color: "#2563EB", fontWeight: "500" },
-  forgotLink: { textAlign: "center", fontSize: 14, color: "#2563EB", marginTop: 16 },
+  resendLinkText: { fontSize: 14, fontWeight: "500" },
+  forgotLink: { textAlign: "center", fontSize: 14, marginTop: 16 },
   signupRow: { flexDirection: "row", justifyContent: "center", marginTop: 24 },
-  signupText: { fontSize: 14, color: "#6B7280" },
-  signupLink: { fontSize: 14, color: "#2563EB", fontWeight: "500" },
+  signupText: { fontSize: 14 },
+  signupLink: { fontSize: 14, fontWeight: "500" },
 });
