@@ -1,22 +1,20 @@
 // File: components/Wordmark.tsx
-import { View, Image, useColorScheme, StyleSheet } from "react-native";
+import { View, Image, StyleSheet } from "react-native";
+import { useTheme } from "../lib/theme";
 
 interface WordmarkProps {
   size?: "sm" | "lg";
 }
 
 // Web used two <img> tags toggled by a CSS dark: variant. RN has no CSS
-// media-query equivalent — useColorScheme() + a plain if/else is the
+// media-query equivalent — useTheme()'s scheme + a plain if/else is the
 // direct replacement.
 export function Wordmark({ size = "lg" }: WordmarkProps) {
-  const scheme = useColorScheme();
+  const { isDark } = useTheme();
   const height = size === "lg" ? 96 : 36;
 
-  // FLAG: these two PNGs need to exist in your Expo project's
-  // assets folder (e.g. assets/images/) — copy them over from
-  // public/app_icon_light_without_tagline.png and the dark variant.
   const source =
-    scheme === "dark"
+    isDark
       ? require("../assets/images/app_icon_dark_without_tagline.png")
       : require("../assets/images/app_icon_light_without_tagline.png");
 
