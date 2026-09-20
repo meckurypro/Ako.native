@@ -22,6 +22,10 @@ export const lightColors = {
   // Saturated sage for the few spots that need to pop against a list
   // (jump-to-post flash, unread rows) — web's --color-highlight.
   highlight: "#BFE6C6",
+  // Post heading color (PostContent.tsx) — its own token, not a reuse
+  // of accent (sage, would read as a link/action color here). Web's
+  // --color-post-header.
+  postHeader: "#1E4C9A",
 };
 
 export const darkColors = {
@@ -35,6 +39,10 @@ export const darkColors = {
   border: "#232220",
   danger: "#C97C6B",
   highlight: "#1E4B31",
+  // Dark-mode counterpart to light mode's #1E4C9A — that navy is far
+  // too dark against near-black canvas, so this swaps to a light
+  // sky-blue instead. Web's dark --color-post-header.
+  postHeader: "#7CB3FF",
 };
 
 export type ThemeColors = typeof lightColors;
