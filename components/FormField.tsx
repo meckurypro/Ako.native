@@ -1,5 +1,7 @@
 // File: components/FormField.tsx
+import { useState } from "react";
 import { View, Text, TextInput, StyleSheet, type TextInputProps } from "react-native";
+import { useTheme, withAlpha } from "../lib/theme";
 
 interface FormFieldProps extends TextInputProps {
   label: string;
@@ -9,17 +11,38 @@ interface FormFieldProps extends TextInputProps {
 // Web version used a native <label htmlFor>; RN has no id-based
 // label/input linking, so the Text above the input is purely visual —
 // screen readers rely on the input's own accessibilityLabel instead.
-export function FormField({ label, error, style, ...inputProps }: FormFieldProps) {
+//
+// Web's border color is border-ink-muted/20 → hover:/40 → focus:accent.
+// RN has no hover, so this tracks focus state directly to get the
+// focus:border-accent behavior; unfocused stays at the /20 resting color.
+export function FormField({ label, error, style, onFocus, onBlur, ...inputProps }: FormFieldProps) {
+  const { colors } = useTheme();
+  const [focused, setFocused] = useState(false);
+
+  const borderColor = error
+    ? colors.danger
+    : focused
+    ? colors.accent
+    : withAlpha(colors.inkMuted, 0.2);
+
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: colors.inkMuted }]}>{label}</Text>
       <TextInput
         {...inputProps}
         accessibilityLabel={label}
-        style={[styles.input, error ? styles.inputError : null, style]}
-        placeholderTextColor="#9CA3AF" // matches ink-muted/45 intent — replace with your theme token
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
+        style={[styles.input, { color: colors.ink, borderColor }, style]}
+        placeholderTextColor={withAlpha(colors.inkMuted, 0.45)}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
     </View>
   );
 }
@@ -31,7 +54,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textTransform: "uppercase",
     letterSpacing: 1.5,
-    color: "#6B7280", // ink-muted — swap for your theme color
     marginBottom: 10,
   },
   input: {
@@ -39,15 +61,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingTop: 4,
     fontSize: 16,
-    color: "#111827", // ink
     borderBottomWidth: 2,
-    borderColor: "rgba(107,114,128,0.2)", // ink-muted/20
-  },
-  inputError: {
-    borderColor: "#DC2626", // danger
   },
   error: {
-    color: "#DC2626",
     fontSize: 13,
     marginTop: 8,
   },
