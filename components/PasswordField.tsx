@@ -1,36 +1,66 @@
 // File: components/PasswordField.tsx
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, type TextInputProps } from "react-native";
-import { Eye, EyeOff } from "lucide-react-native"; // FLAG: web used lucide-react — this is the RN sibling package, confirm it's installed
+import { Eye, EyeOff } from "lucide-react-native";
+import { useTheme, withAlpha } from "../lib/theme";
 
 interface PasswordFieldProps extends Omit<TextInputProps, "secureTextEntry"> {
   label: string;
   error?: string;
 }
 
-export function PasswordField({ label, error, style, ...inputProps }: PasswordFieldProps) {
+// Same focus/border behavior as FormField — see the comment there.
+export function PasswordField({
+  label,
+  error,
+  style,
+  onFocus,
+  onBlur,
+  ...inputProps
+}: PasswordFieldProps) {
+  const { colors } = useTheme();
   const [visible, setVisible] = useState(false);
+  const [focused, setFocused] = useState(false);
+
+  const borderColor = error
+    ? colors.danger
+    : focused
+    ? colors.accent
+    : withAlpha(colors.inkMuted, 0.2);
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: colors.inkMuted }]}>{label}</Text>
       <View style={styles.inputRow}>
         <TextInput
           {...inputProps}
           secureTextEntry={!visible}
           accessibilityLabel={label}
-          style={[styles.input, error ? styles.inputError : null, style]}
-          placeholderTextColor="#9CA3AF"
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
+          style={[styles.input, { color: colors.ink, borderColor }, style]}
+          placeholderTextColor={withAlpha(colors.inkMuted, 0.45)}
         />
         <Pressable
           onPress={() => setVisible((v) => !v)}
           accessibilityLabel={visible ? "Hide password" : "Show password"}
+          hitSlop={8}
           style={styles.eyeButton}
         >
-          {visible ? <EyeOff size={17} color="#6B7280" /> : <Eye size={17} color="#6B7280" />}
+          {visible ? (
+            <EyeOff size={17} color={colors.inkMuted} />
+          ) : (
+            <Eye size={17} color={colors.inkMuted} />
+          )}
         </Pressable>
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
     </View>
   );
 }
@@ -42,7 +72,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textTransform: "uppercase",
     letterSpacing: 1.5,
-    color: "#6B7280",
     marginBottom: 10,
   },
   inputRow: { position: "relative", justifyContent: "center" },
@@ -52,11 +81,8 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingRight: 32,
     fontSize: 16,
-    color: "#111827",
     borderBottomWidth: 2,
-    borderColor: "rgba(107,114,128,0.2)",
   },
-  inputError: { borderColor: "#DC2626" },
   eyeButton: { position: "absolute", right: 0, bottom: 10 },
-  error: { color: "#DC2626", fontSize: 13, marginTop: 8 },
+  error: { fontSize: 13, marginTop: 8 },
 });
