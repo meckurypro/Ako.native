@@ -1,9 +1,13 @@
 // File: components/Button.tsx
 import { Pressable, Text, StyleSheet, type PressableProps } from "react-native";
+import { useTheme } from "../lib/theme";
 
 interface ButtonProps extends PressableProps {
   variant?: "primary" | "secondary" | "ghost";
   loading?: boolean;
+  // "md" (default) — full-width button used throughout the app.
+  // "sm" — compact pill variant for inline row actions. Mirrors web's
+  // Button.tsx size prop exactly.
   size?: "md" | "sm";
   children: React.ReactNode;
 }
@@ -17,7 +21,20 @@ export function Button({
   style,
   ...rest
 }: ButtonProps) {
+  const { colors } = useTheme();
   const isDisabled = disabled || loading;
+
+  const backgroundByVariant = {
+    primary: colors.accent,
+    secondary: colors.accentSoft,
+    ghost: "transparent",
+  } as const;
+
+  const textColorByVariant = {
+    primary: colors.canvas,
+    secondary: colors.accent,
+    ghost: colors.inkMuted,
+  } as const;
 
   return (
     <Pressable
@@ -25,25 +42,26 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         size === "sm" ? styles.sizeSm : styles.sizeMd,
-        variants[variant],
+        { backgroundColor: backgroundByVariant[variant] },
         isDisabled ? styles.disabled : null,
-        pressed && !isDisabled ? styles.pressed : null, // RN's stand-in for :hover, since touch has no hover state
+        // RN's stand-in for :hover, since touch has no hover state.
+        pressed && !isDisabled ? styles.pressed : null,
         typeof style === "function" ? style({ pressed }) : style,
       ]}
       {...rest}
     >
-      <Text style={[styles.text, variant === "primary" ? styles.textPrimary : styles.textOther]}>
+      <Text
+        style={[
+          styles.text,
+          size === "sm" ? styles.textSm : null,
+          { color: textColorByVariant[variant] },
+        ]}
+      >
         {loading ? (size === "sm" ? "…" : "Please wait…") : children}
       </Text>
     </Pressable>
   );
 }
-
-const variants = StyleSheet.create({
-  primary: { backgroundColor: "#111827" }, // accent — swap for your theme token
-  secondary: { backgroundColor: "#F3F4F6" }, // accent-soft
-  ghost: { backgroundColor: "transparent" },
-});
 
 const styles = StyleSheet.create({
   base: { alignItems: "center", justifyContent: "center" },
@@ -52,6 +70,5 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.85 },
   text: { fontWeight: "500", fontSize: 16 },
-  textPrimary: { color: "#FFFFFF" }, // canvas
-  textOther: { color: "#111827" },
+  textSm: { fontSize: 14 },
 });
