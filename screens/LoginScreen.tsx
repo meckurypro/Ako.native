@@ -1,4 +1,5 @@
-// File: screens/LoginScreen.tsx (or app/(auth)/login.tsx if using Expo Router file-based routes)
+// File: screens/LoginScreen.tsx
+// (routed to via app/(auth)/login.tsx, which just re-exports this as the default)
 import { useState } from "react";
 import {
   View,
