@@ -19,6 +19,9 @@ export const lightColors = {
   accentSoft: "#E3E9E1",
   border: "#E9E4D8",
   danger: "#A64B3F",
+  // Saturated sage for the few spots that need to pop against a list
+  // (jump-to-post flash, unread rows) — web's --color-highlight.
+  highlight: "#BFE6C6",
 };
 
 export const darkColors = {
@@ -31,6 +34,7 @@ export const darkColors = {
   accentSoft: "#17281F",
   border: "#232220",
   danger: "#C97C6B",
+  highlight: "#1E4B31",
 };
 
 export type ThemeColors = typeof lightColors;
