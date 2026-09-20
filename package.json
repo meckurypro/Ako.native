@@ -10,6 +10,7 @@
   "dependencies": {
     "expo": "~57.0.24",
     "expo-router": "~57.0.22",
+    "expo-linking": "~57.0.10",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "@supabase/supabase-js": "^2.45.0",
