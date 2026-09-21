@@ -18,7 +18,6 @@
 //     and then blanked so a later remount doesn't replay them.
 //   - Web's `?interest=` / `?tab=` are seeded from route params, then kept in
 //     state (see hooks/useTabState).
-//   - PostCardPlaceholder stands in for PostCard until that's ported.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
@@ -38,7 +37,7 @@ import { usePageRankedFeed, usePageFollowingFeed } from "../hooks/usePageFeed";
 import { useActiveIdentity } from "../hooks/usePages";
 import { useTabState } from "../hooks/useTabState";
 import { useAutoHideScrollHandler } from "../hooks/useAutoHideOnScroll";
-import { PostCardPlaceholder as PostCard } from "../components/PostCardPlaceholder";
+import { PostCard } from "../components/PostCard";
 import { AutoHideTopBar } from "../components/AutoHideTopBar";
 import { TopHeader } from "../components/TopHeader";
 import { SwipeableTabs } from "../components/SwipeableTabs";

@@ -37,7 +37,7 @@ interface SheetContextValue {
 
 const SheetContext = createContext<SheetContextValue | null>(null);
 
-function useSheet(): SheetContextValue {
+export function useSheet(): SheetContextValue {
   const ctx = useContext(SheetContext);
   if (!ctx) throw new Error("SheetRow / SheetCancel must be rendered inside <BottomSheet>");
   return ctx;
