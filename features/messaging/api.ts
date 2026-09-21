@@ -1,3 +1,4 @@
+// File: features/messaging/api.ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
@@ -45,3 +46,15 @@ export async function markConversationRead(conversationId:string,userId:string,m
 export type HiddenMessage = Pick<Message,"id"|"conversation_id"|"sender_id"|"content"|"created_at"|"is_deleted">;
 export function useHiddenMessages(conversationId:string){const{user}=useAuth();return useQuery({queryKey:["mobile-hidden-messages",conversationId,user?.id],enabled:!!user&&!!conversationId,queryFn:async():Promise<HiddenMessage[]>=>{const{data:states,error:stateError}=await supabase.from("message_user_state").select("message_id").eq("user_id",user!.id).not("hidden_at","is",null);if(stateError)throw stateError;if(!states?.length)return[];const{data,error}=await supabase.from("messages").select("id, conversation_id, sender_id, content, created_at, is_deleted").eq("conversation_id",conversationId).in("id",states.map(row=>row.message_id)).order("created_at",{ascending:false});if(error)throw error;return(data??[]) as HiddenMessage[];}});}
 export function useUnhideMessage(conversationId:string){const{user}=useAuth();const client=useQueryClient();return useMutation({mutationFn:async(messageId:string)=>{if(!user)throw new Error("Not signed in");const{error}=await supabase.from("message_user_state").update({hidden_at:null}).eq("message_id",messageId).eq("user_id",user.id);if(error)throw error;},onSuccess:()=>void client.invalidateQueries({queryKey:["mobile-hidden-messages",conversationId]})});}
+// Finds or creates a 1:1 conversation via the get_or_create_direct_conversation RPC (never inserts into conversations directly). Mirrors web's useStartConversation.
+export function useStartConversation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (otherUserId: string): Promise<string> => {
+      const { data, error } = await supabase.rpc("get_or_create_direct_conversation", { p_other_user_id: otherUserId });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["mobile-conversations"] }),
+  });
+}

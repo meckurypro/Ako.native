@@ -1,3 +1,4 @@
+// File: app/messages/[conversationId].tsx
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { Icon } from "@/components/core/Icon";
@@ -29,9 +30,9 @@ const Wallpaper = memo(function Wallpaper() { const { colors } = useTheme(); ret
 
 export default function MessageThreadScreen() {
   void EMOJI;
-  const router = useRouter(); const { conversationId } = useLocalSearchParams<{ conversationId: string }>(); const { colors } = useTheme(); const { user } = useAuth(); const insets = useSafeAreaInsets(); const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 34) : insets.bottom;
+  const router = useRouter(); const { conversationId, draft: draftParam } = useLocalSearchParams<{ conversationId: string; draft?: string }>(); const { colors } = useTheme(); const { user } = useAuth(); const insets = useSafeAreaInsets(); const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 34) : insets.bottom;
   const conversation = useConversation(conversationId ?? ""); const messages = useMessages(conversationId ?? ""); const send = useSendMessage(conversationId ?? ""); const sendVoice=useSendVoiceNote(conversationId??""); const recorder=useAudioRecorder(RecordingPresets.HIGH_QUALITY);const recorderState=useAudioRecorderState(recorder,150);
-  const list = useRef<FlatList<Message>>(null); const [draft, setDraft] = useState(""); const [showEmoji, setShowEmoji] = useState(false); const [search, setSearch] = useState(false); const [headerMenu, setHeaderMenu] = useState(false); const [query, setQuery] = useState("");const[voicePreview,setVoicePreview]=useState<{uri:string;durationSec:number;viewOnce:boolean}|null>(null);
+  const list = useRef<FlatList<Message>>(null); const [draft, setDraft] = useState(() => typeof draftParam === "string" ? draftParam : ""); const [showEmoji, setShowEmoji] = useState(false); const [search, setSearch] = useState(false); const [headerMenu, setHeaderMenu] = useState(false); const [query, setQuery] = useState("");const[voicePreview,setVoicePreview]=useState<{uri:string;durationSec:number;viewOnce:boolean}|null>(null);
   const person = conversation.data?.other_participant; const rows = useMemo(() => !query.trim() ? messages.data ?? [] : (messages.data ?? []).filter(message => message.content.toLowerCase().includes(query.trim().toLowerCase())), [messages.data, query]);
   useEffect(() => { const unread = (messages.data ?? []).filter(message => message.sender_id !== user?.id && !message.read_at).map(message => message.id); if (user && conversationId) void markConversationRead(conversationId, user.id, unread); }, [conversationId, messages.data, user]);
   useEffect(() => { if (!query) setTimeout(() => list.current?.scrollToEnd({ animated: false }), 50); }, [messages.data?.length, query]);

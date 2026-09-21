@@ -1,3 +1,4 @@
+// File: app/(tabs)/create.tsx
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Icon, type IconName } from "@/components/core/Icon";
 import { Image } from "expo-image";
@@ -13,8 +14,8 @@ const ICONS: Record<LibraryItemType, IconName> = { book: "book-text", course: "g
 const LABELS: Record<LibraryItemType, string> = { book: "Book", course: "Course", media: "Media", file: "File", url: "Link" };
 
 function LibraryRow({ item }: { item: LibraryItem }) {
-  const { colors } = useTheme(); const unavailable = item.status === "archived";
-  return <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(libraryItemUrl(item))} style={({ pressed }) => [s.row, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? .7 : 1 }]}><View style={[s.thumbnail, { backgroundColor: colors.background }]}>{item.thumbnailUrl ? <Image source={{ uri: item.thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name="image" size={19} color={colors.textMuted} />}</View><View style={s.rowCopy}><Text numberOfLines={1} style={s.rowTitle}>{item.title}</Text><View style={s.rowMeta}><Icon name={ICONS[item.projectType]} size={13} color={colors.textMuted} /><Text numberOfLines={1} color="muted" style={s.metaText}>{LABELS[item.projectType]} · {item.acquiredVia === "purchased" ? "Purchased" : "Free"}{unavailable ? " · Archived by creator" : ""}</Text></View></View></Pressable>;
+  const router = useRouter(); const { colors } = useTheme(); const unavailable = item.status === "archived";
+  return <Pressable accessibilityRole="link" onPress={() => item.projectType === "book" || item.projectType === "course" ? void Linking.openURL(libraryItemUrl(item)) : router.push({ pathname: "/projects/[projectId]", params: { projectId: item.projectId } })} style={({ pressed }) => [s.row, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? .7 : 1 }]}><View style={[s.thumbnail, { backgroundColor: colors.background }]}>{item.thumbnailUrl ? <Image source={{ uri: item.thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name="image" size={19} color={colors.textMuted} />}</View><View style={s.rowCopy}><Text numberOfLines={1} style={s.rowTitle}>{item.title}</Text><View style={s.rowMeta}><Icon name={ICONS[item.projectType]} size={13} color={colors.textMuted} /><Text numberOfLines={1} color="muted" style={s.metaText}>{LABELS[item.projectType]} · {item.acquiredVia === "purchased" ? "Purchased" : "Free"}{unavailable ? " · Archived by creator" : ""}</Text></View></View></Pressable>;
 }
 
 export default function LibraryScreen() {
