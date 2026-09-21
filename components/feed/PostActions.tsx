@@ -3,6 +3,7 @@ import { Alert, InteractionManager, Modal, Pressable, Share, StyleSheet, View } 
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown, useReducedMotion } from "react-native-reanimated";
 import { PressableScale, Text } from "@/components/core";
 import {
@@ -18,6 +19,7 @@ import {
   type SecondaryActionKey,
 } from "@/features/feed/api";
 import { useActiveIdentity } from "@/features/compose/api";
+import { useHasReshared, usePrioritizedPostToday, useRecordShare } from "@/features/feed/postExtras";
 import type { Stance } from "@/features/feed/types";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -28,9 +30,9 @@ import { LikeHeart } from "./LikeHeart";
 type Icon = keyof typeof MaterialCommunityIcons.glyphMap;
 type ActionItem = { key: string; icon: Icon; label: string; active?: boolean; count?: string; danger?: boolean; onPress: () => void };
 
-function MainAction({ icon, label, active, onPress }: { icon: Icon; label?: string; active?: boolean; onPress: () => void }) {
+function MainAction({ icon, label, active, onPress, onLongPress }: { icon: Icon; label?: string; active?: boolean; onPress: () => void; onLongPress?: () => void }) {
   const { colors } = useTheme();
-  return <PressableScale accessibilityRole="button" accessibilityLabel={label ?? icon} onPress={onPress} hitSlop={8} style={s.mainAction}>{icon === "heart" || icon === "heart-outline" ? <LikeHeart active={!!active} color="#D98978" /> : <MaterialCommunityIcons name={icon} size={24} color={active ? "#D98978" : colors.text} />}{label ? <Text style={[s.mainCount, { color: active ? "#D98978" : colors.text }]}>{label}</Text> : null}</PressableScale>;
+  return <PressableScale accessibilityRole="button" accessibilityLabel={label ?? icon} onPress={onPress} onLongPress={onLongPress} delayLongPress={450} hitSlop={8} style={s.mainAction}>{icon === "heart" || icon === "heart-outline" ? <LikeHeart active={!!active} color="#D98978" /> : <MaterialCommunityIcons name={icon} size={24} color={active ? "#D98978" : colors.text} />}{label ? <Text style={[s.mainCount, { color: active ? "#D98978" : colors.text }]}>{label}</Text> : null}</PressableScale>;
 }
 
 function SheetAction({ item }: { item: ActionItem }) {
@@ -44,7 +46,7 @@ function ActionSheet({ children, colors, onClose }: { children: React.ReactNode;
   return <Modal visible transparent animationType="none" onRequestClose={onClose}><View style={s.modal}><Animated.View entering={reduced ? undefined : FadeIn.duration(140)} exiting={reduced ? undefined : FadeOut.duration(110)} style={[s.backdrop, { backgroundColor: colors.overlay }]}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /></Animated.View><Animated.View entering={reduced ? undefined : SlideInDown.duration(220)} exiting={reduced ? undefined : SlideOutDown.duration(180)} style={[s.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>{children}</Animated.View></View></Modal>;
 }
 
-export function PostActions({ postId, recipientId, recipientName, recipientAvatar, likes, dislikes: _dislikes, comments, shares, support, disagree, pushback, onComments, onReshare, hasTaggedProject }: { postId: string; recipientId?: string; recipientName?: string; recipientAvatar?: string | null; likes: number; dislikes: number; comments: number; shares: number; support: number; disagree: number; pushback: number; onComments: () => void; onReshare: () => void; hasTaggedProject?: boolean }) {
+export function PostActions({ postId, recipientId, recipientName, recipientAvatar, likes, dislikes: _dislikes, comments, shares, support, disagree, pushback, onComments, onReshare, hasTaggedProject, disabled, reshareTargetId }: { postId: string; recipientId?: string; recipientName?: string; recipientAvatar?: string | null; likes: number; dislikes: number; comments: number; shares: number; support: number; disagree: number; pushback: number; onComments: () => void; onReshare: () => void; hasTaggedProject?: boolean; disabled?: boolean; reshareTargetId?: string }) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const [more, setMore] = useState(false);
@@ -71,8 +73,15 @@ export function PostActions({ postId, recipientId, recipientName, recipientAvata
   const archivePost = useSetPostArchived();
   const deletePost = useDeletePost();
   const engagement = useEngagementOrder();
+  const client = useQueryClient();
+  // You can only reshare a given post once: hide Reshare after that (never fetched for your own posts, where it's hidden anyway).
+  const hasReshared = useHasReshared(reshareTargetId ?? postId, !isOwner);
+  const prioritizedToday = usePrioritizedPostToday(giftRecipientId, isOwner);
+  const isPrioritizedToday = prioritizedToday.data === postId;
 
-  const share = () => void Share.share({ message: `https://ako.app/post/${postId}` });
+  const recordShare = useRecordShare(postId);
+  // Recorded only if the person actually completed the share, like web — it doubles as the usage signal Share is ranked by.
+  const share = async () => { try { const result = await Share.share({ message: `https://ako.app/post/${postId}` }); if (result.action === Share.sharedAction) recordShare.mutate(); } catch { /* share sheet failed to open */ } };
   const react = async (kind: "like" | "dislike") => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
@@ -90,7 +99,7 @@ export function PostActions({ postId, recipientId, recipientName, recipientAvata
   };
   const comingSoon = (label: string) => Alert.alert(label, `${label} is not available on mobile yet.`);
 
-  const confirmPrioritize = () => Alert.alert("Prioritize this post?", "This becomes your priority post for today.", [{ text: "Cancel", style: "cancel" }, { text: "Prioritize", onPress: () => prioritizePost.mutate(postId, { onError: err => Alert.alert("Couldn't prioritize", err instanceof Error ? err.message : "Please try again.") }) }]);
+  const confirmPrioritize = () => Alert.alert("Prioritize this post?", "This becomes your priority post for today.", [{ text: "Cancel", style: "cancel" }, { text: "Prioritize", onPress: () => prioritizePost.mutate(postId, { onSuccess: () => void client.invalidateQueries({ queryKey: ["prioritized-post-today"] }), onError: err => Alert.alert("Couldn't prioritize", err instanceof Error ? err.message : "Please try again.") }) }]);
   const confirmArchive = () => isArchived ? archivePost.mutate({ postId, archived: false }, { onError: () => Alert.alert("Couldn't unarchive this post") }) : Alert.alert("Archive this post?", "It will be hidden from your profile and the feed until you unarchive it from your Archive.", [{ text: "Cancel", style: "cancel" }, { text: "Archive", onPress: () => archivePost.mutate({ postId, archived: true }, { onError: () => Alert.alert("Couldn't archive this post") }) }]);
   const confirmDelete = () => Alert.alert("Delete this post?", "This action cannot be undone.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => deletePost.mutate(postId, { onError: () => Alert.alert("Couldn't delete this post") }) }]);
 
@@ -98,9 +107,9 @@ export function PostActions({ postId, recipientId, recipientName, recipientAvata
 
   const defaultOrder: SecondaryActionKey[] = ["support", "reshare", "share", "gift", "save", "disagree", "pushback", "dislike"];
   const hiddenForOwner: SecondaryActionKey[] = ["reshare", "gift", "disagree", "pushback", "dislike"];
-  const order = (engagement.data ?? defaultOrder).filter(key => (!isOwner || !hiddenForOwner.includes(key)) && !(key === "gift" && (viewingAsPage || taggedProject)));
+  const order = (engagement.data ?? defaultOrder).filter(key => (!isOwner || !hiddenForOwner.includes(key)) && !(key === "gift" && (viewingAsPage || taggedProject)) && !(key === "reshare" && hasReshared.data));
   const ownerActions: ActionItem[] = isOwner ? [
-    { key: "prioritize", icon: "rocket-outline", label: "Prioritize", onPress: () => closeAnd(confirmPrioritize) },
+    { key: "prioritize", icon: isPrioritizedToday ? "rocket" : "rocket-outline", label: isPrioritizedToday ? "Prioritized today" : "Prioritize", active: isPrioritizedToday, onPress: () => closeAnd(isPrioritizedToday ? () => {} : confirmPrioritize) },
     { key: "promote", icon: "bullhorn-outline", label: "Promote", onPress: () => closeAnd(() => comingSoon("Promote")) },
     { key: "tag-people", icon: "tag-outline", label: "Tag people", onPress: () => closeAnd(() => comingSoon("Tag people")) },
     { key: "collaborators", icon: "account-group-outline", label: "Collaborators", onPress: () => closeAnd(() => comingSoon("Collaborators")) },
@@ -111,7 +120,7 @@ export function PostActions({ postId, recipientId, recipientName, recipientAvata
   const middle = moreActions.slice(0, 3);
 
   return <>
-    <View style={s.actionBlock}><View style={s.row}><MainAction icon={like.data ? "heart" : "heart-outline"} label={likes ? String(likes) : undefined} active={!!like.data} onPress={() => void react("like")}/>{middle.map(item => <MainAction key={item.key} icon={item.icon} label={item.count} active={item.active} onPress={item.onPress}/>)}<MainAction icon="dots-horizontal" onPress={() => setMore(true)}/></View><Pressable onPress={onComments} hitSlop={7} style={s.comments}><Text color="secondary" style={s.commentsText}>Comments: {comments}</Text></Pressable></View>
+    <View style={s.actionBlock}><View pointerEvents={disabled ? "none" : "auto"} style={[s.row, disabled && { opacity: 0.4 }]}><MainAction icon={like.data ? "heart" : "heart-outline"} label={likes ? String(likes) : undefined} active={!!like.data} onPress={() => void react("like")} onLongPress={() => setMore(true)}/>{middle.map(item => <MainAction key={item.key} icon={item.icon} label={item.count} active={item.active} onPress={item.onPress} onLongPress={() => setMore(true)}/>)}<MainAction icon="dots-horizontal" onPress={() => setMore(true)}/></View><Pressable onPress={onComments} hitSlop={7} style={s.comments}><Text color="secondary" style={s.commentsText}>Comments: {comments}</Text></Pressable></View>
     {more && <ActionSheet colors={colors} onClose={() => setMore(false)}><View style={s.grid}>{moreActions.map(item => <SheetAction key={item.key} item={{ ...item, onPress: () => closeAnd(item.onPress) }} />)}</View><Pressable onPress={() => setMore(false)} style={[s.cancel, { borderTopColor: colors.border }]}><Text color="secondary" style={s.cancelText}>Cancel</Text></Pressable></ActionSheet>}
     {stance && <StanceComposer postId={postId} initial={stance} onClose={() => setStance(null)}/>}
     {Boolean(gift && giftRecipientId && giftRecipientName) && <GiftPicker recipientId={giftRecipientId!} recipientName={giftRecipientName!} recipientAvatar={giftRecipientAvatar} postId={postId} onClose={() => setGift(false)}/>}
