@@ -10,3 +10,4 @@ export * from "./PressableScale";
 export * from "./Screen";
 export * from "./Section";
 export * from "./Text";
+export * from "./VerifiedBadge";
