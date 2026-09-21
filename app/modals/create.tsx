@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { SlideInDown, useReducedMotion } from "react-native-reanimated";
@@ -7,8 +7,8 @@ import { Text } from "@/components/core";
 import { useTheme } from "@/providers/ThemeProvider";
 
 const CHOICES = [
-  { key: "post", icon: "square-edit-outline", label: "Post", description: "Share a thought with your followers" },
-  { key: "project", icon: "folder-plus-outline", label: "Project", description: "List a file, event, course, or paid link" },
+  { key: "post", icon: "pen-square", label: "Post", description: "Share a thought with your followers" },
+  { key: "project", icon: "folder-plus", label: "Project", description: "List a file, event, course, or paid link" },
 ] as const;
 
 export default function CreateModal() {
@@ -41,7 +41,7 @@ export default function CreateModal() {
           <View style={styles.header}>
             <Text style={styles.title} accessibilityRole="header">Create</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Close" hitSlop={10} onPress={() => router.back()} style={styles.close}>
-              <MaterialCommunityIcons name="close" size={22} color={colors.textMuted} />
+              <Icon name="x" size={22} color={colors.textMuted} />
             </Pressable>
           </View>
           <View style={styles.choices}>
@@ -54,13 +54,13 @@ export default function CreateModal() {
                 style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surface }]}
               >
                 <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
-                  <MaterialCommunityIcons name={choice.icon} size={20} color={colors.accent} />
+                  <Icon name={choice.icon} size={20} color={colors.accent} />
                 </View>
                 <View style={styles.copy}>
                   <Text style={styles.label}>{choice.label}</Text>
                   <Text style={styles.description} color="muted" numberOfLines={1}>{choice.description}</Text>
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
+                <Icon name="chevron-right" size={18} color={colors.textMuted} />
               </Pressable>
             ))}
           </View>

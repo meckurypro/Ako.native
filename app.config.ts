@@ -27,12 +27,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: ANDROID_PACKAGE,
     softwareKeyboardLayoutMode: "resize",
+    // Foreground/monochrome are a padded white wordmark on transparent (inside Android's 66dp safe circle, so no mask crops it);
+    // the background is the icon's own dark green, the same colour as assets/icons/app-icon.png.
     adaptiveIcon: {
-      foregroundImage: "./assets/icons/app-icon.png",
-      backgroundColor: "#131311",
+      foregroundImage: "./assets/icons/adaptive-icon.png",
+      monochromeImage: "./assets/icons/adaptive-icon.png",
+      backgroundColor: "#0B1A15",
     },
     predictiveBackGestureEnabled: true,
   },
+  web: { favicon: "./assets/icons/app-icon.png" },
   plugins: [
     "expo-router",
     "expo-secure-store",
@@ -44,12 +48,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       "expo-splash-screen",
       {
-        image: "./assets/images/splash-logo.png",
+        // Light: the light-theme wordmark (dark green) on the light canvas; dark: the dark-theme wordmark (bright green)
+        // on the dark canvas — the same pairing the in-app headers use (theme/wordmarks.ts). Backgrounds are the
+        // theme's `background` tokens so the hand-off to AppSplash doesn't flash.
+        image: "./assets/images/app-icon-light-without-tagline.png",
         imageWidth: 152,
         resizeMode: "contain",
-        backgroundColor: "#131311",
+        backgroundColor: "#F7F4EF",
         dark: {
-          image: "./assets/images/splash-logo.png",
+          image: "./assets/images/app-icon-dark-without-tagline.png",
           backgroundColor: "#0C0C0B",
         },
       },

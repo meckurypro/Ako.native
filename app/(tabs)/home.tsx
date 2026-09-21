@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import Animated from "react-native-reanimated";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,9 +11,8 @@ import { useFeedChromeStyle } from "@/components/navigation/FeedChrome";
 import { useActiveIdentity } from "@/features/compose/api";
 import { usePageNotifications, usePersonalNotifications } from "@/features/notifications/api";
 import { useTheme } from "@/providers/ThemeProvider";
+import { wordmarks } from "@/theme/wordmarks";
 
-const LOGO_DARK = require("@/assets/images/app-icon-light-without-tagline.png");
-const LOGO_LIGHT = require("@/assets/images/app-icon-dark-without-tagline.png");
 const TABS = ["For You", "Top Discussions", "Following"];
 function FeedTabs({ index, onChange }: { index: number; onChange: (index: number) => void }) {
   const { colors } = useTheme(); const { width } = useWindowDimensions(); const tabWidth = (width - 32) / 3;
@@ -23,7 +22,7 @@ function FeedTabs({ index, onChange }: { index: number; onChange: (index: number
 export default function HomeScreen() {
   const [feedState, setFeedState] = useState<{ index: number; interest?: string }>(() => ({ index: 0 })); const { colors, isDark } = useTheme(); const router = useRouter(); const { interest } = useLocalSearchParams<{ interest?: string }>(); const insets = useSafeAreaInsets(); const chromeStyle = useFeedChromeStyle(-(insets.top + 109)); const index = feedState.interest === interest ? feedState.index : 0; const setIndex = useCallback((next: number) => setFeedState({ index: next, interest }), [interest]);
   const identity = useActiveIdentity(); const pageId = identity.data?.mode === "page" ? identity.data.page.id : undefined; const personalNotifications = usePersonalNotifications(!pageId); const pageNotifications = usePageNotifications(pageId, !!pageId); const unread = (pageId ? pageNotifications.data : personalNotifications.data)?.filter(item => !item.read_at).length ?? 0;
-  return <View style={[styles.root, { backgroundColor: colors.background }]}><FeedPager index={index} onIndexChange={setIndex} interestId={interest} /><Animated.View pointerEvents="box-none" style={[styles.chrome, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top }, chromeStyle]}><View style={styles.top}><Pressable accessibilityLabel="Create" onPress={() => router.push("/modals/create")} style={styles.icon}><MaterialCommunityIcons name="plus" size={24} color={colors.textMuted} /></Pressable><Image accessibilityLabel="AKọ" source={isDark ? LOGO_LIGHT : LOGO_DARK} style={styles.logo} contentFit="contain" /><Pressable accessibilityLabel="Open notifications" onPress={() => router.push("/(tabs)/notifications")} style={styles.icon}><MaterialCommunityIcons name="bell-outline" size={22} color={colors.textMuted} />{unread > 0 ? <View style={[styles.badge, { backgroundColor: colors.danger }]}><Text style={styles.badgeText}>{unread > 9 ? "9+" : unread}</Text></View> : null}</Pressable></View><FeedTabs index={index} onChange={setIndex} /></Animated.View></View>;
+  return <View style={[styles.root, { backgroundColor: colors.background }]}><FeedPager index={index} onIndexChange={setIndex} interestId={interest} /><Animated.View pointerEvents="box-none" style={[styles.chrome, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top }, chromeStyle]}><View style={styles.top}><Pressable accessibilityLabel="Create" onPress={() => router.push("/modals/create")} style={styles.icon}><Icon name="plus" size={24} color={colors.textMuted} /></Pressable><Image accessibilityLabel="AKọ" source={wordmarks[isDark ? "dark" : "light"]} style={styles.logo} contentFit="contain" /><Pressable accessibilityLabel="Open notifications" onPress={() => router.push("/(tabs)/notifications")} style={styles.icon}><Icon name="bell" size={22} color={colors.textMuted} />{unread > 0 ? <View style={[styles.badge, { backgroundColor: colors.danger }]}><Text style={styles.badgeText}>{unread > 9 ? "9+" : unread}</Text></View> : null}</Pressable></View><FeedTabs index={index} onChange={setIndex} /></Animated.View></View>;
 }
 
 const styles = StyleSheet.create({

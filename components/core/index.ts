@@ -11,3 +11,5 @@ export * from "./Screen";
 export * from "./Section";
 export * from "./Text";
 export * from "./VerifiedBadge";
+export * from "./BrandGlyphs";
+export * from "./Icon";

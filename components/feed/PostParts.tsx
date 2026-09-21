@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Linking, Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import { useRouter } from "expo-router";
 import { Avatar, PressableScale, Text } from "@/components/core";
 import { useCollaborators } from "@/features/feed/postExtras";
@@ -50,7 +50,7 @@ export function PostCollaboratorsBadge({ postId }: { postId: string }) {
         onPress={() => anchor.current?.measureInWindow((x, y, _w, h) => setRect({ x, y, h }))}
         style={[s.collabBadge, { backgroundColor: colors.accent, borderColor: colors.surface }]}
       >
-        <MaterialCommunityIcons name="account-group" size={11} color={colors.background} />
+        <Icon name="users" size={11} color={colors.background} />
       </Pressable>
 
       {rect && (
@@ -125,7 +125,7 @@ export function RepostBadgeButton({ source }: { source: Post["reshared_post"] | 
         onPress={press}
         style={[s.repostBadge, { backgroundColor: colors.accentSoft }]}
       >
-        <MaterialCommunityIcons name="repeat" size={14} color={colors.accent} />
+        <Icon name="repeat-2" size={14} color={colors.accent} />
       </Pressable>
       {unavailable && (
         <View style={[s.tooltip, { backgroundColor: colors.text }]}>
@@ -176,7 +176,7 @@ export function TaggedProjectEmbed({ project }: { project: TaggedProjectSummary 
         {project.thumbnail_url ? (
           <Image source={{ uri: project.thumbnail_url }} style={s.thumbImage} contentFit="cover" />
         ) : (
-          <MaterialCommunityIcons name="image-outline" size={16} color={colors.textSecondary} />
+          <Icon name="image" size={16} color={colors.textSecondary} />
         )}
       </View>
       <Text numberOfLines={1} style={s.projectTitle}>
@@ -223,14 +223,14 @@ export function ArchivedCornerBar({ onRestore, onDelete }: { onRestore?: () => v
         <CornerButton
           label="Restore"
           background={`${colors.text}B3`}
-          icon={<MaterialCommunityIcons name="backup-restore" size={14} color={colors.background} />}
+          icon={<Icon name="rotate-ccw" size={14} color={colors.background} />}
           onPress={onRestore}
         />
       )}
       <CornerButton
         label="Delete"
         background={`${colors.danger}D9`}
-        icon={<MaterialCommunityIcons name="trash-can-outline" size={14} color={colors.background} />}
+        icon={<Icon name="trash-2" size={14} color={colors.background} />}
         onPress={onDelete}
       />
     </View>

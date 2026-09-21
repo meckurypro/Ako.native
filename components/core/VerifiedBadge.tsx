@@ -9,7 +9,7 @@
 // tracks light/dark theming, same as web.
 import { View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "./Icon";
 import { useTheme } from "@/providers/ThemeProvider";
 import { fonts } from "@/theme/fonts";
 import { Text } from "./Text";
@@ -43,7 +43,7 @@ function BadgeIcon({ size }: { size: number }) {
           borderColor: "rgba(255,255,255,0.25)",
         }}
       >
-        <MaterialCommunityIcons name="check-bold" size={Math.round(size * 0.58)} color="#FFFFFF" />
+        <Icon name="check" size={Math.round(size * 0.62)} strokeWidth={3.25} color="#FFFFFF" />
       </LinearGradient>
     </View>
   );

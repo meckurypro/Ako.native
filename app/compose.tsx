@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,10 +26,10 @@ const MAX_MEDIA = 4;
 const MAX_TOPICS = 5;
 
 const FORMAT_ACTIONS = [
-  { icon: "format-bold", label: "Bold" },
-  { icon: "format-italic", label: "Italic" },
-  { icon: "format-strikethrough", label: "Strikethrough" },
-  { icon: "format-underline", label: "Underline" },
+  { icon: "bold", label: "Bold" },
+  { icon: "italic", label: "Italic" },
+  { icon: "strikethrough", label: "Strikethrough" },
+  { icon: "underline", label: "Underline" },
 ] as const;
 
 export default function Compose() {
@@ -147,7 +147,7 @@ export default function Compose() {
           <View style={styles.formatBar}>
             {FORMAT_ACTIONS.map((action) => (
               <Pressable key={action.label} accessibilityLabel={action.label} hitSlop={8} style={styles.formatButton}>
-                <MaterialCommunityIcons name={action.icon} size={18} color={colors.textMuted} />
+                <Icon name={action.icon} size={18} color={colors.textMuted} />
               </Pressable>
             ))}
           </View>
@@ -170,7 +170,7 @@ export default function Compose() {
                 <View key={url} style={[styles.mediaItem, { backgroundColor: colors.surface }]}>
                   <Image source={{ uri: url }} style={styles.mediaImage} />
                   <Pressable accessibilityLabel="Remove attachment" onPress={() => setMedia((items) => items.filter((item) => item !== url))} style={styles.removeMedia}>
-                    <MaterialCommunityIcons name="close" size={15} color="#fff" />
+                    <Icon name="x" size={15} color="#fff" />
                   </Pressable>
                 </View>
               ))}
@@ -179,14 +179,14 @@ export default function Compose() {
 
           {!postingAsPage && (
             <Pressable onPress={() => Alert.alert("Tag a project", "Project tagging is not available in the mobile app yet.")} style={styles.inlineAction}>
-              <MaterialCommunityIcons name="link-variant" size={16} color={colors.accent} />
+              <Icon name="link-2" size={16} color={colors.accent} />
               <Text style={styles.actionText} color="accent">Tag a project</Text>
             </Pressable>
           )}
 
           <View style={styles.attachmentRow}>
             <Pressable disabled={upload.isPending || media.length >= MAX_MEDIA} onPress={() => void pick()} style={styles.inlineAction}>
-              <MaterialCommunityIcons name="image-outline" size={19} color={colors.accent} />
+              <Icon name="image" size={19} color={colors.accent} />
               <Text style={styles.actionText} color="accent">
                 {upload.isPending ? "Uploading…" : media.length ? "Add another slide" : "Add photos"}
               </Text>
@@ -199,7 +199,7 @@ export default function Compose() {
               Topics <Text style={styles.optional} color="muted">(optional)</Text>
               {!!topics.size && <Text style={styles.optional} color="muted"> ({topics.size})</Text>}
             </Text>
-            <MaterialCommunityIcons name={topicsOpen ? "chevron-up" : "chevron-down"} size={20} color={colors.textMuted} />
+            <Icon name={topicsOpen ? "chevron-up" : "chevron-down"} size={20} color={colors.textMuted} />
           </Pressable>
           {topicsOpen && (
             <View style={styles.topicPanel}>
@@ -221,7 +221,7 @@ export default function Compose() {
                       <Text style={styles.categoryTitle}>
                         {category.name}{selectedInCategory ? <Text color="muted"> ({selectedInCategory})</Text> : null}
                       </Text>
-                      <MaterialCommunityIcons name={categoryOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+                      <Icon name={categoryOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
                     </Pressable>
                     {categoryOpen && (
                       <View style={styles.topicList}>
@@ -261,11 +261,11 @@ export default function Compose() {
 
         <View style={[styles.actionBar, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           <Pressable accessibilityLabel="Close" onPress={close} hitSlop={10} style={styles.bottomIcon}>
-            <MaterialCommunityIcons name="close" size={24} color={colors.textMuted} />
+            <Icon name="x" size={24} color={colors.textMuted} />
           </Pressable>
           <View style={styles.actionBarRight}>
             <Pressable accessibilityLabel="More posting options" disabled={!canSubmit || create.isPending} onPress={showMore} style={[styles.bottomIcon, (!canSubmit || create.isPending) && styles.disabled]}>
-              <MaterialCommunityIcons name="dots-horizontal" size={22} color={colors.textMuted} />
+              <Icon name="more-horizontal" size={22} color={colors.textMuted} />
             </Pressable>
             <Pressable
               accessibilityRole="button"

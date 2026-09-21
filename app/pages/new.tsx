@@ -1,7 +1,7 @@
 // @ts-nocheck -- Expo Router's generated route union updates after the next dev-server restart.
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "@/components/core";
@@ -85,7 +85,7 @@ export default function NewPage() {
   return <SafeAreaView style={[s.safe, { backgroundColor: colors.background }]}>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <View style={s.header}>
-        <Pressable onPress={() => router.back()}><MaterialCommunityIcons name="arrow-left" size={23} color={colors.textMuted} /></Pressable>
+        <Pressable onPress={() => router.back()}><Icon name="arrow-left" size={23} color={colors.textMuted} /></Pressable>
         <Text style={s.title}>Create a page</Text>
       </View>
       <View style={s.types}>{TYPES.map(([value, label]) => <Pressable key={value} onPress={() => setType(value)} style={[s.type, { borderColor: type === value ? colors.accent : colors.border, backgroundColor: type === value ? colors.accentSoft : colors.surface }]}><Text style={s.typeText}>{label}</Text></Pressable>)}</View>
@@ -108,8 +108,8 @@ export default function NewPage() {
       <TextInput value={tagline} onChangeText={value => setTagline(value.slice(0, 100))} placeholder={TAGLINE[type]} placeholderTextColor={colors.textMuted} style={input} />
       <Label text="Bio" />
       <TextInput value={bio} onChangeText={value => setBio(value.slice(0, 280))} multiline textAlignVertical="top" style={[...input, s.bio]} />
-      <Pressable onPress={() => setTopicsOpen(value => !value)} style={s.topicHeader}><Text color="muted">Topics (optional){topics.size ? ` (${topics.size})` : ""}</Text><MaterialCommunityIcons name={topicsOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} /></Pressable>
-      {topicsOpen && <View><Text variant="caption" color="muted">{topics.size}/5 selected</Text>{categories.data?.map(cat => <View key={cat.id} style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}><Pressable onPress={() => setOpenCategory(value => value === cat.id ? null : cat.id)} style={s.topicHeader}><Text>{cat.name}</Text><MaterialCommunityIcons name={openCategory === cat.id ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} /></Pressable>{openCategory === cat.id && <View style={s.pills}>{cat.interests.map(i => { const selected = topics.has(i.id); return <Pressable key={i.id} disabled={!selected && topics.size >= 5} onPress={() => toggle(i.id)} style={[s.pill, { borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.accent : colors.surface }]}><Text style={{ fontSize: 12, color: selected ? colors.onAccent : colors.text }}>{i.name}</Text></Pressable>; })}</View>}</View>)}</View>}
+      <Pressable onPress={() => setTopicsOpen(value => !value)} style={s.topicHeader}><Text color="muted">Topics (optional){topics.size ? ` (${topics.size})` : ""}</Text><Icon name={topicsOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} /></Pressable>
+      {topicsOpen && <View><Text variant="caption" color="muted">{topics.size}/5 selected</Text>{categories.data?.map(cat => <View key={cat.id} style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}><Pressable onPress={() => setOpenCategory(value => value === cat.id ? null : cat.id)} style={s.topicHeader}><Text>{cat.name}</Text><Icon name={openCategory === cat.id ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} /></Pressable>{openCategory === cat.id && <View style={s.pills}>{cat.interests.map(i => { const selected = topics.has(i.id); return <Pressable key={i.id} disabled={!selected && topics.size >= 5} onPress={() => toggle(i.id)} style={[s.pill, { borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.accent : colors.surface }]}><Text style={{ fontSize: 12, color: selected ? colors.onAccent : colors.text }}>{i.name}</Text></Pressable>; })}</View>}</View>)}</View>}
       {error && <Text color="danger" style={s.error}>{error}</Text>}
       <Pressable disabled={create.isPending} onPress={() => void submit()} style={[s.submit, { backgroundColor: colors.accent }, create.isPending && { opacity: .5 }]}><Text style={{ color: colors.onAccent, fontWeight: "600" }}>{create.isPending ? "Creating…" : `Create ${type}`}</Text></Pressable>
     </ScrollView>

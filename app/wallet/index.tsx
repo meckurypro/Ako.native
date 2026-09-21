@@ -1,5 +1,5 @@
 import { ActivityIndicator, Platform, FlatList, Pressable, StyleSheet, View } from "react-native";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon, type IconName } from "@/components/core/Icon";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
@@ -7,20 +7,20 @@ import { Text } from "@/components/core";
 import { formatUsd, useFeatureFlag, useWallet, useWalletTransactions, type WalletTransaction } from "@/features/wallet/api";
 import { useTheme } from "@/providers/ThemeProvider";
 
-const TXN_META: Record<string, { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; positive?: boolean }> = {
-  fund: { label: "Wallet funded", icon: "arrow-down-circle-outline", positive: true },
-  gift_sent: { label: "Gift sent", icon: "gift-outline" },
-  gift_received: { label: "Gift received", icon: "gift-outline", positive: true },
-  platform_fee: { label: "Platform fee", icon: "receipt-text-outline" },
-  withdrawal: { label: "Withdrawal", icon: "arrow-up-circle-outline" },
-  reversal: { label: "Reversal", icon: "restore", positive: true },
-  dev_credit: { label: "Dev credit", icon: "star-four-points-outline", positive: true },
+const TXN_META: Record<string, { label: string; icon: IconName; positive?: boolean }> = {
+  fund: { label: "Wallet funded", icon: "arrow-down-circle", positive: true },
+  gift_sent: { label: "Gift sent", icon: "gift" },
+  gift_received: { label: "Gift received", icon: "gift", positive: true },
+  platform_fee: { label: "Platform fee", icon: "receipt" },
+  withdrawal: { label: "Withdrawal", icon: "arrow-up-circle" },
+  reversal: { label: "Reversal", icon: "rotate-ccw", positive: true },
+  dev_credit: { label: "Dev credit", icon: "sparkles", positive: true },
   affiliate_commission: { label: "Affiliate commission", icon: "trending-up", positive: true },
-  affiliate_commission_reversal: { label: "Affiliate commission reversed", icon: "restore" },
-  promotion_charge: { label: "Promotion charge", icon: "bullhorn-outline" },
-  promotion_refund: { label: "Promotion refund", icon: "restore", positive: true },
-  give_back: { label: "Give Back reward", icon: "heart-outline", positive: true },
-  give_back_reversal: { label: "Give Back reward reversed", icon: "restore" },
+  affiliate_commission_reversal: { label: "Affiliate commission reversed", icon: "rotate-ccw" },
+  promotion_charge: { label: "Promotion charge", icon: "megaphone" },
+  promotion_refund: { label: "Promotion refund", icon: "rotate-ccw", positive: true },
+  give_back: { label: "Give Back reward", icon: "heart", positive: true },
+  give_back_reversal: { label: "Give Back reward reversed", icon: "rotate-ccw" },
 };
 
 function txnDate(dateString: string) {
@@ -46,25 +46,25 @@ export default function WalletScreen() {
 function Header() {
   const router = useRouter();
   const { colors } = useTheme();
-  return <View style={[s.header, { borderBottomColor: colors.border }]}><Pressable onPress={() => router.back()} style={s.back}><Feather name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.title}>Wallet</Text></View>;
+  return <View style={[s.header, { borderBottomColor: colors.border }]}><Pressable onPress={() => router.back()} style={s.back}><Icon name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.title}>Wallet</Text></View>;
 }
 
 function BalanceCard({ balance, depositsEnabled, withdrawalsEnabled, affiliateEnabled }: { balance: number; depositsEnabled: boolean; withdrawalsEnabled: boolean; affiliateEnabled: boolean }) {
   const router = useRouter();
   const { colors } = useTheme();
-  return <View style={[s.balanceCard, { backgroundColor: colors.accent }]}><MaterialCommunityIcons name="wallet-outline" size={140} color="rgba(6,18,11,0.12)" style={s.watermark} /><View style={s.balanceTop}><Text style={s.balanceLabel}>AVAILABLE BALANCE</Text><MaterialCommunityIcons name="wallet-outline" size={18} color="rgba(6,18,11,0.7)" /></View><Text style={s.balance}>{formatUsd(balance)}</Text><View style={s.actionRow}>{depositsEnabled ? <WalletAction label="Fund" icon="arrow-down-circle-outline" onPress={() => router.push("/wallet/fund")} /> : null}{withdrawalsEnabled ? <WalletAction label="Withdraw" icon="arrow-up-circle-outline" onPress={() => router.push("/wallet/withdraw")} /> : null}{affiliateEnabled ? <WalletAction label="Affiliate" icon="trending-up" onPress={() => router.push({ pathname: "/activity/[kind]", params: { kind: "affiliates" } })} /> : null}</View>{!depositsEnabled && !withdrawalsEnabled ? <Text style={s.unavailable}>Funding and withdrawals are temporarily unavailable.</Text> : null}</View>;
+  return <View style={[s.balanceCard, { backgroundColor: colors.accent }]}><Icon name="wallet" size={140} color="rgba(6,18,11,0.12)" style={s.watermark} /><View style={s.balanceTop}><Text style={s.balanceLabel}>AVAILABLE BALANCE</Text><Icon name="wallet" size={18} color="rgba(6,18,11,0.7)" /></View><Text style={s.balance}>{formatUsd(balance)}</Text><View style={s.actionRow}>{depositsEnabled ? <WalletAction label="Fund" icon="arrow-down-circle" onPress={() => router.push("/wallet/fund")} /> : null}{withdrawalsEnabled ? <WalletAction label="Withdraw" icon="arrow-up-circle" onPress={() => router.push("/wallet/withdraw")} /> : null}{affiliateEnabled ? <WalletAction label="Affiliate" icon="trending-up" onPress={() => router.push({ pathname: "/activity/[kind]", params: { kind: "affiliates" } })} /> : null}</View>{!depositsEnabled && !withdrawalsEnabled ? <Text style={s.unavailable}>Funding and withdrawals are temporarily unavailable.</Text> : null}</View>;
 }
 
-function WalletAction({ label, icon, onPress }: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={s.walletAction}><View style={s.actionIcon}><MaterialCommunityIcons name={icon} size={20} color="#07130D" /></View><Text style={s.actionText}>{label}</Text></Pressable>;
+function WalletAction({ label, icon, onPress }: { label: string; icon: IconName; onPress: () => void }) {
+  return <Pressable onPress={onPress} style={s.walletAction}><View style={s.actionIcon}><Icon name={icon} size={20} color="#07130D" /></View><Text style={s.actionText}>{label}</Text></Pressable>;
 }
 
 function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
   const { colors } = useTheme();
   const amount = Number(transaction.amount);
-  const meta = TXN_META[transaction.type] ?? { label: transaction.type, icon: "receipt-text-outline" as const };
+  const meta = TXN_META[transaction.type] ?? { label: transaction.type, icon: "receipt" as const };
   const positive = amount >= 0;
-  return <View style={[s.txnRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}><View style={[s.txnIcon, { backgroundColor: positive || meta.positive ? colors.accentSoft : colors.background }]}><MaterialCommunityIcons name={meta.icon} size={17} color={positive || meta.positive ? colors.accent : colors.textMuted} /></View><View style={s.txnCopy}><Text numberOfLines={1} style={s.txnTitle}>{meta.label}</Text><Text color="muted" style={s.txnDate}>{txnDate(transaction.created_at)}</Text></View><Text style={[s.txnAmount, { color: positive ? colors.accent : colors.text }]}>{positive ? "+" : "-"}{formatUsd(Math.abs(amount))}</Text></View>;
+  return <View style={[s.txnRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}><View style={[s.txnIcon, { backgroundColor: positive || meta.positive ? colors.accentSoft : colors.background }]}><Icon name={meta.icon} size={17} color={positive || meta.positive ? colors.accent : colors.textMuted} /></View><View style={s.txnCopy}><Text numberOfLines={1} style={s.txnTitle}>{meta.label}</Text><Text color="muted" style={s.txnDate}>{txnDate(transaction.created_at)}</Text></View><Text style={[s.txnAmount, { color: positive ? colors.accent : colors.text }]}>{positive ? "+" : "-"}{formatUsd(Math.abs(amount))}</Text></View>;
 }
 
 function FeedIcon({ color }: { color: string }) {
@@ -82,10 +82,10 @@ function BottomNavigation() {
   const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 34) : insets.bottom;
   const items = [
     { label: "Feed", onPress: () => router.push("/(tabs)/home"), icon: <FeedIcon color={colors.textMuted} /> },
-    { label: "Discover", onPress: () => router.push("/(tabs)/discover"), icon: <Feather name="search" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Discover", onPress: () => router.push("/(tabs)/discover"), icon: <Icon name="search" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
     { label: "Library", onPress: () => router.push("/(tabs)/create"), icon: <LibraryIcon color={colors.textMuted} /> },
-    { label: "Messages", onPress: () => router.push("/(tabs)/inbox"), icon: <Feather name="message-circle" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
-    { label: "Profile", onPress: () => router.push("/(tabs)/profile"), icon: <Feather name="user" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Messages", onPress: () => router.push("/(tabs)/inbox"), icon: <Icon name="message-circle" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Profile", onPress: () => router.push("/(tabs)/profile"), icon: <Icon name="user" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
   ];
   return <View style={[s.bottomNav, { backgroundColor: colors.surface, borderTopColor: colors.border, height: 76 + bottomInset, paddingBottom: bottomInset }]}>{items.map((item) => <Pressable key={item.label} onPress={item.onPress} style={s.navItem}>{item.icon}<Text color="muted" style={s.navLabel}>{item.label}</Text></Pressable>)}</View>;
 }

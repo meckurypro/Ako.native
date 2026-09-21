@@ -77,7 +77,7 @@ export function PostMedia({ urls, compact = false }: { urls: string[]; compact?:
     <Modal visible={viewerIndex !== null} animationType="fade" statusBarTranslucent onRequestClose={() => setViewerIndex(null)}>
       <View style={styles.viewer}>
         {viewerIndex !== null ? <ScrollView key={viewerIndex} horizontal pagingEnabled showsHorizontalScrollIndicator={false} contentOffset={{ x: viewerIndex * screenWidth, y: 0 }} style={styles.viewerPager}>{urls.map((uri, slide) => <View key={`${uri}-${slide}`} style={{ width: screenWidth, height: screenHeight, justifyContent: "center" }}>{VIDEO.test(uri) ? <Video uri={uri} width={screenWidth} height={screenHeight} controls /> : <Image source={{ uri }} style={{ width: screenWidth, height: screenHeight }} contentFit="contain" />}</View>)}</ScrollView> : null}
-        <View style={styles.close}><IconButton icon="close" label="Close media" onPress={() => setViewerIndex(null)} /></View>
+        <View style={styles.close}><IconButton icon="x" label="Close media" onPress={() => setViewerIndex(null)} /></View>
       </View>
     </Modal>
   </>;

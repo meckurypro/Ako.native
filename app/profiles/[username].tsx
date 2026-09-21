@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Linking, Modal, Platform, Pressable, Share, StyleSheet, TextInput, View } from "react-native";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { ActivityIndicator, Alert, FlatList, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from "react-native";
+import { Icon, type IconName } from "@/components/core/Icon";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
-import { Avatar, Text, VerifiedBadge } from "@/components/core";
+import { Avatar, FacebookGlyph, Text, VerifiedBadge, WhatsAppGlyph, XGlyph } from "@/components/core";
 import { ErrorState, Skeleton } from "@/components/feedback";
 import { PostCard } from "@/components/feed/PostCard";
 import { type Person, type ProfileMedia, useFollowState, useIdentityPosts, useProfile, useProfileMedia, useToggleFollow } from "@/features/discovery/api";
@@ -55,9 +55,9 @@ function ProfileHeader({ person, own, locked, showMediaTab, tab, setTab, followL
 
   return <>
     <View style={s.toolbar}>
-      {own || following ? <View style={{ flex: 1 }} /> : <Pressable onPress={() => router.push("/(tabs)/inbox")} style={[s.messageButton, { borderColor: colors.border }]}><Feather name="message-square" size={16} color={colors.textSecondary} /><Text color="secondary" style={s.actionText}>Message</Text></Pressable>}
-      {own ? <Pressable onPress={() => router.push("/profile/edit")} style={[s.messageButton, { borderColor: colors.border }]}><Text color="secondary" style={s.actionText}>Edit profile</Text></Pressable> : <Pressable disabled={followPending} onPress={() => following ? setRelationshipOpen(true) : onFollow()} style={[s.followButton, { backgroundColor: following ? colors.accentSoft : colors.surfaceElevated, opacity: followPending ? .55 : 1 }]}>{followPending ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={s.followContent}>{following ? <Feather name="user-check" size={14} color={colors.accent} /> : null}<Text style={[s.actionText, { color: following ? colors.accent : colors.text }]}>{followLabel}</Text>{following ? <Feather name="chevron-down" size={14} color={colors.accent} /> : null}</View>}</Pressable>}
-      <Pressable accessibilityLabel="More options" onPress={showMore} style={s.more}><Feather name="more-horizontal" size={18} color={colors.textSecondary} /></Pressable>
+      {own || following ? <View style={{ flex: 1 }} /> : <Pressable onPress={() => router.push("/(tabs)/inbox")} style={[s.messageButton, { borderColor: colors.border }]}><Icon name="message-square" size={16} color={colors.textSecondary} /><Text color="secondary" style={s.actionText}>Message</Text></Pressable>}
+      {own ? <Pressable onPress={() => router.push("/profile/edit")} style={[s.messageButton, { borderColor: colors.border }]}><Text color="secondary" style={s.actionText}>Edit profile</Text></Pressable> : <Pressable disabled={followPending} onPress={() => following ? setRelationshipOpen(true) : onFollow()} style={[s.followButton, { backgroundColor: following ? colors.accentSoft : colors.surfaceElevated, opacity: followPending ? .55 : 1 }]}>{followPending ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={s.followContent}>{following ? <Icon name="user-check" size={14} color={colors.accent} /> : null}<Text style={[s.actionText, { color: following ? colors.accent : colors.text }]}>{followLabel}</Text>{following ? <Icon name="chevron-down" size={14} color={colors.accent} /> : null}</View>}</Pressable>}
+      <Pressable accessibilityLabel="More options" onPress={showMore} style={s.more}><Icon name="more-horizontal" size={18} color={colors.textSecondary} /></Pressable>
     </View>
     <RelationshipMenu visible={relationshipOpen} person={person} onClose={() => setRelationshipOpen(false)} onMessage={() => { setRelationshipOpen(false); router.push("/(tabs)/inbox"); }} onUnfollow={() => { setRelationshipOpen(false); onFollow(); }} />
     <ShareProfileSheet visible={shareOpen} person={person} url={profileUrl} onClose={() => setShareOpen(false)} />
@@ -87,38 +87,42 @@ function MediaCard({ item }: { item: ProfileMedia }) {
   const preview = details?.video_url || details?.audio_url;
   const effectivePrice = item.promo_price_usd ?? item.price_usd;
   const play = () => { if (preview) void Linking.openURL(preview); else Alert.alert(item.title, "A playable preview isn't available for this media yet."); };
-  return <View style={[s.mediaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={s.mediaHero}>{item.thumbnail_url ? <Image source={{ uri: item.thumbnail_url }} style={s.mediaImage} contentFit="cover" /> : <View style={[s.mediaImage, s.mediaFallback, { backgroundColor: colors.accentSoft }]}><MaterialCommunityIcons name="image-outline" size={38} color={colors.textMuted} /></View>}<Pressable accessibilityLabel={`Play ${item.title}`} onPress={play} style={({ pressed }) => [s.play, { backgroundColor: "rgba(235,229,219,.86)", opacity: pressed ? .72 : 1 }]}><MaterialCommunityIcons name="play" size={31} color="#11110F" style={{ marginLeft: 3 }} /></Pressable></View><View style={s.mediaCopy}><View style={s.mediaTitleRow}><Text numberOfLines={1} style={s.mediaTitle}>{item.title}</Text><View style={[s.pricePill, { backgroundColor: colors.accentSoft }]}><Text color="accent" style={s.priceText}>{effectivePrice <= 0 ? "Free" : `$${effectivePrice.toFixed(2)}`}</Text></View></View><Text color="secondary" style={s.mediaType}>Media</Text>{item.description ? <Text color="secondary" numberOfLines={2} style={s.mediaDescription}>{item.description}</Text> : null}</View></View>;
+  return <View style={[s.mediaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={s.mediaHero}>{item.thumbnail_url ? <Image source={{ uri: item.thumbnail_url }} style={s.mediaImage} contentFit="cover" /> : <View style={[s.mediaImage, s.mediaFallback, { backgroundColor: colors.accentSoft }]}><Icon name="image" size={38} color={colors.textMuted} /></View>}<Pressable accessibilityLabel={`Play ${item.title}`} onPress={play} style={({ pressed }) => [s.play, { backgroundColor: "rgba(235,229,219,.86)", opacity: pressed ? .72 : 1 }]}><Icon name="play" size={31} color="#11110F" style={{ marginLeft: 3 }} /></Pressable></View><View style={s.mediaCopy}><View style={s.mediaTitleRow}><Text numberOfLines={1} style={s.mediaTitle}>{item.title}</Text><View style={[s.pricePill, { backgroundColor: colors.accentSoft }]}><Text color="accent" style={s.priceText}>{effectivePrice <= 0 ? "Free" : `$${effectivePrice.toFixed(2)}`}</Text></View></View><Text color="secondary" style={s.mediaType}>Media</Text>{item.description ? <Text color="secondary" numberOfLines={2} style={s.mediaDescription}>{item.description}</Text> : null}</View></View>;
 }
 
 function RelationshipMenu({ visible, person, onClose, onMessage, onUnfollow }: { visible: boolean; person: Person; onClose: () => void; onMessage: () => void; onUnfollow: () => void }) {
   const { colors } = useTheme();
-  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><Pressable onPress={onClose} style={s.overlay}><View style={[s.relationshipMenu, { backgroundColor: colors.surface, borderColor: colors.border }]}><Pressable onPress={onMessage} style={s.relationRow}><Feather name="send" size={22} color={colors.text} /><Text style={s.relationText}>Message</Text></Pressable><Pressable onPress={onClose} style={s.relationRow}><Feather name="bell-off" size={22} color={colors.text} /><Text style={s.relationText}>Mute their updates</Text></Pressable><View style={[s.relationDivider, { backgroundColor: colors.border }]} /><Pressable onPress={onUnfollow} accessibilityLabel={`Unfollow ${person.display_name}`} style={s.relationRow}><Feather name="user-minus" size={22} color={colors.danger} /><Text style={[s.relationText, { color: colors.danger }]}>Unfollow</Text></Pressable></View></Pressable></Modal>;
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><Pressable onPress={onClose} style={s.overlay}><View style={[s.relationshipMenu, { backgroundColor: colors.surface, borderColor: colors.border }]}><Pressable onPress={onMessage} style={s.relationRow}><Icon name="send" size={22} color={colors.text} /><Text style={s.relationText}>Message</Text></Pressable><Pressable onPress={onClose} style={s.relationRow}><Icon name="bell-off" size={22} color={colors.text} /><Text style={s.relationText}>Mute their updates</Text></Pressable><View style={[s.relationDivider, { backgroundColor: colors.border }]} /><Pressable onPress={onUnfollow} accessibilityLabel={`Unfollow ${person.display_name}`} style={s.relationRow}><Icon name="user-minus" size={22} color={colors.danger} /><Text style={[s.relationText, { color: colors.danger }]}>Unfollow</Text></Pressable></View></Pressable></Modal>;
 }
 
 function ShareProfileSheet({ visible, person, url, onClose }: { visible: boolean; person: Person; url: string; onClose: () => void }) {
   const { colors } = useTheme();
   const share = () => void Share.share({ message: url, url });
+  // web: 48px discs — brand glyphs for WhatsApp / Facebook / X, tinted icon discs for the rest.
+  const disc = (background: string, name: IconName, color: string) => <View style={[s.actionCircle, { backgroundColor: background }]}><Icon name={name} size={20} color={color} /></View>;
   const actions = [
-    { label: "WhatsApp", icon: "phone-call", color: "#45D765", onPress: share },
-    { label: "Copy link", icon: "link", color: colors.surfaceElevated, onPress: share },
-    { label: "SMS", icon: "message-square", color: "#45D765", onPress: share },
-    { label: "Email", icon: "mail", color: "#D4D4D0", onPress: share },
-    { label: "Facebook", icon: "facebook", color: "#2F7CF6", onPress: share },
-  ] as const;
+    { label: "WhatsApp", glyph: <WhatsAppGlyph size={52} />, onPress: share },
+    { label: "Copy link", glyph: disc(`${colors.text}1A`, "link-2", colors.text), onPress: share },
+    { label: "SMS", glyph: disc("#2FCC66", "message-square", "#FFFFFF"), onPress: share },
+    { label: "Email", glyph: disc(`${colors.text}B3`, "mail", colors.background), onPress: share },
+    { label: "Facebook", glyph: <FacebookGlyph size={52} />, onPress: share },
+    { label: "X", glyph: <XGlyph size={52} />, onPress: share },
+    { label: "More", glyph: disc(`${colors.text}1A`, "share-2", colors.text), onPress: share },
+  ];
   const tools = [
-    { label: "Customise\nname", icon: "edit-3", color: colors.surfaceElevated },
+    { label: "Customise\nname", icon: "pen-square", color: colors.surfaceElevated },
     { label: "Report", icon: "flag", color: colors.surfaceElevated },
-    { label: "Report a\npost/project", icon: "alert-circle", color: colors.surfaceElevated },
+    { label: "Report a\npost/project", icon: "file-warning", color: colors.surfaceElevated },
     { label: "Mute their\nupdates", icon: "bell-off", color: colors.surfaceElevated },
-    { label: "Block", icon: "slash", color: colors.surfaceElevated, danger: true },
-    { label: "QR code", icon: "grid", color: colors.surfaceElevated },
+    { label: "Block", icon: "ban", color: colors.surfaceElevated, danger: true },
+    { label: "QR code", icon: "qr-code", color: colors.surfaceElevated },
   ] as const;
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={s.shareOverlay}><Pressable onPress={onClose} style={StyleSheet.absoluteFill} /><View style={[s.shareSheet, { backgroundColor: colors.background, borderColor: colors.border }]}><View style={s.sheetTitleRow}><View style={{ width: 24 }} /><Text style={s.sheetTitle}>Send to</Text><Pressable onPress={onClose} style={s.sheetClose}><Feather name="x" size={22} color={colors.textSecondary} /></Pressable></View><View style={[s.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}><Feather name="search" size={16} color={colors.textMuted} /><TextInput placeholder="Search" placeholderTextColor={colors.textMuted} style={[s.searchInput, { color: colors.text }]} /></View><View style={s.recipientRow}><Avatar uri={person.avatar_url} name={person.display_name} size={54} /><Text numberOfLines={1} style={s.recipientName}>{person.display_name}</Text></View><View style={[s.sheetDivider, { backgroundColor: colors.border }]} /><View style={s.actionRow}>{actions.map(action => <Pressable key={action.label} onPress={action.onPress} style={s.shareAction}><View style={[s.actionCircle, { backgroundColor: action.color }]}><Feather name={action.icon as any} size={20} color={action.color === "#D4D4D0" ? "#11110F" : "#FFFFFF"} /></View><Text color="secondary" align="center" style={s.actionLabel}>{action.label}</Text></Pressable>)}</View><View style={[s.sheetDivider, { backgroundColor: colors.border }]} /><View style={s.toolGrid}>{tools.map(tool => { const danger = "danger" in tool && tool.danger; return <Pressable key={tool.label} onPress={danger ? undefined : share} style={s.toolItem}><View style={[s.toolCircle, { backgroundColor: tool.color }]}><Feather name={tool.icon as any} size={20} color={danger ? colors.danger : colors.text} /></View><Text align="center" style={[s.toolLabel, { color: danger ? colors.danger : colors.text }]}>{tool.label}</Text></Pressable>; })}</View></View></View></Modal>;
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={s.shareOverlay}><Pressable onPress={onClose} style={StyleSheet.absoluteFill} /><View style={[s.shareSheet, { backgroundColor: colors.background, borderColor: colors.border }]}><View style={s.sheetTitleRow}><View style={{ width: 24 }} /><Text style={s.sheetTitle}>Send to</Text><Pressable onPress={onClose} style={s.sheetClose}><Icon name="x" size={22} color={colors.textSecondary} /></Pressable></View><View style={[s.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}><Icon name="search" size={16} color={colors.textMuted} /><TextInput placeholder="Search" placeholderTextColor={colors.textMuted} style={[s.searchInput, { color: colors.text }]} /></View><View style={s.recipientRow}><Avatar uri={person.avatar_url} name={person.display_name} size={54} /><Text numberOfLines={1} style={s.recipientName}>{person.display_name}</Text></View><View style={[s.sheetDivider, { backgroundColor: colors.border }]} /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.actionRow}>{actions.map(action => <Pressable key={action.label} onPress={action.onPress} style={s.shareAction}>{action.glyph}<Text color="secondary" align="center" style={s.actionLabel}>{action.label}</Text></Pressable>)}</ScrollView><View style={[s.sheetDivider, { backgroundColor: colors.border }]} /><View style={s.toolGrid}>{tools.map(tool => { const danger = "danger" in tool && tool.danger; return <Pressable key={tool.label} onPress={danger ? undefined : share} style={s.toolItem}><View style={[s.toolCircle, { backgroundColor: tool.color }]}><Icon name={tool.icon} size={20} color={danger ? colors.danger : colors.text} /></View><Text align="center" style={[s.toolLabel, { color: danger ? colors.danger : colors.text }]}>{tool.label}</Text></Pressable>; })}</View></View></View></Modal>;
 }
 
 function PrivateState() {
   const { colors } = useTheme();
-  return <View style={s.private}><View style={[s.lock, { backgroundColor: colors.accentSoft }]}><MaterialCommunityIcons name="lock-outline" size={25} color={colors.accent} /></View><Text variant="heading">This account is private</Text><Text color="secondary" align="center">Follow this account to see their posts and media.</Text></View>;
+  return <View style={s.private}><View style={[s.lock, { backgroundColor: colors.accentSoft }]}><Icon name="lock" size={25} color={colors.accent} /></View><Text variant="heading">This account is private</Text><Text color="secondary" align="center">Follow this account to see their posts and media.</Text></View>;
 }
 
 function Empty({ label }: { label: string }) {
@@ -140,10 +144,10 @@ function BottomNavigation() {
   const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 34) : insets.bottom;
   const items = [
     { label: "Feed", onPress: () => router.push("/(tabs)/home"), icon: <FeedIcon color={colors.textMuted} /> },
-    { label: "Discover", onPress: () => router.push("/(tabs)/discover"), icon: <Feather name="search" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Discover", onPress: () => router.push("/(tabs)/discover"), icon: <Icon name="search" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
     { label: "Library", onPress: () => router.push("/(tabs)/create"), icon: <LibraryIcon color={colors.textMuted} /> },
-    { label: "Messages", onPress: () => router.push("/(tabs)/inbox"), icon: <Feather name="message-circle" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
-    { label: "Profile", onPress: () => router.push("/(tabs)/profile"), icon: <Feather name="user" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Messages", onPress: () => router.push("/(tabs)/inbox"), icon: <Icon name="message-circle" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Profile", onPress: () => router.push("/(tabs)/profile"), icon: <Icon name="user" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
   ];
   return <View style={[s.bottomNav, { backgroundColor: colors.surface, borderTopColor: colors.border, height: 76 + bottomInset, paddingBottom: bottomInset }]}>{items.map((item) => <Pressable key={item.label} onPress={item.onPress} style={s.navItem}>{item.icon}<Text color="muted" style={s.navLabel}>{item.label}</Text></Pressable>)}</View>;
 }

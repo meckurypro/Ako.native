@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon, type IconName } from "@/components/core/Icon";
 import { BlurView } from "expo-blur";
 import { Redirect, Tabs } from "expo-router";
 import { useMemo } from "react";
@@ -13,8 +13,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 
 type RouteName = "home" | "discover" | "create" | "inbox" | "profile";
-type FeatherIcon = keyof typeof Feather.glyphMap;
-const tabs: { route: RouteName; label: string; icon?: FeatherIcon }[] = [
+const tabs: { route: RouteName; label: string; icon?: IconName }[] = [
   { route: "home", label: "Feed" }, { route: "discover", label: "Discover", icon: "search" }, { route: "create", label: "Library" }, { route: "inbox", label: "Messages", icon: "message-circle" }, { route: "profile", label: "Profile", icon: "user" },
 ];
 
@@ -29,7 +28,7 @@ function LibraryIcon({ color, active }: { color: string; active: boolean }) {
 function NavGlyph({ item, color, active }: { item: (typeof tabs)[number]; color: string; active: boolean }) {
   if (item.route === "home") return <FeedIcon color={color} active={active} />;
   if (item.route === "create") return <LibraryIcon color={color} active={active} />;
-  return <Feather name={item.icon!} size={24} color={color} strokeWidth={active ? 2 : 1.75} />;
+  return <Icon name={item.icon!} size={24} color={color} strokeWidth={active ? 2 : 1.75} fill={active ? color : "none"} />;
 }
 
 function AutoHideTabBar({ state, navigation }: any) {
