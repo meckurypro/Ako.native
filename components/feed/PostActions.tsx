@@ -1,3 +1,4 @@
+// File: components/feed/PostActions.tsx
 import { Alert, InteractionManager, Modal, Pressable, Share, StyleSheet, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -16,6 +17,7 @@ import {
   useToggleReaction,
   type SecondaryActionKey,
 } from "@/features/feed/api";
+import { useActiveIdentity } from "@/features/compose/api";
 import type { Stance } from "@/features/feed/types";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -42,7 +44,7 @@ function ActionSheet({ children, colors, onClose }: { children: React.ReactNode;
   return <Modal visible transparent animationType="none" onRequestClose={onClose}><View style={s.modal}><Animated.View entering={reduced ? undefined : FadeIn.duration(140)} exiting={reduced ? undefined : FadeOut.duration(110)} style={[s.backdrop, { backgroundColor: colors.overlay }]}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /></Animated.View><Animated.View entering={reduced ? undefined : SlideInDown.duration(220)} exiting={reduced ? undefined : SlideOutDown.duration(180)} style={[s.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>{children}</Animated.View></View></Modal>;
 }
 
-export function PostActions({ postId, recipientId, recipientName, recipientAvatar, likes, dislikes: _dislikes, comments, shares, support, disagree, pushback, onComments, onReshare }: { postId: string; recipientId?: string; recipientName?: string; recipientAvatar?: string | null; likes: number; dislikes: number; comments: number; shares: number; support: number; disagree: number; pushback: number; onComments: () => void; onReshare: () => void }) {
+export function PostActions({ postId, recipientId, recipientName, recipientAvatar, likes, dislikes: _dislikes, comments, shares, support, disagree, pushback, onComments, onReshare, hasTaggedProject }: { postId: string; recipientId?: string; recipientName?: string; recipientAvatar?: string | null; likes: number; dislikes: number; comments: number; shares: number; support: number; disagree: number; pushback: number; onComments: () => void; onReshare: () => void; hasTaggedProject?: boolean }) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const [more, setMore] = useState(false);
@@ -54,6 +56,10 @@ export function PostActions({ postId, recipientId, recipientName, recipientAvata
   const giftRecipientAvatar = recipientAvatar ?? post.data?.author.avatar_url ?? null;
   const isOwner = !!user?.id && !!giftRecipientId && user.id === giftRecipientId;
   const isArchived = !!post.data?.is_archived;
+  // Gifting is hidden while acting as a page (wallets belong to people, not pages) and on posts that tag a project for sale. Callers that already hold the post pass hasTaggedProject so the button never flashes in before the post query resolves.
+  const identity = useActiveIdentity();
+  const viewingAsPage = identity.data?.mode === "page";
+  const taggedProject = hasTaggedProject ?? !!post.data?.tagged_project;
 
   const like = useReaction(postId, "like");
   const dislike = useReaction(postId, "dislike");
@@ -92,7 +98,7 @@ export function PostActions({ postId, recipientId, recipientName, recipientAvata
 
   const defaultOrder: SecondaryActionKey[] = ["support", "reshare", "share", "gift", "save", "disagree", "pushback", "dislike"];
   const hiddenForOwner: SecondaryActionKey[] = ["reshare", "gift", "disagree", "pushback", "dislike"];
-  const order = (engagement.data ?? defaultOrder).filter(key => !isOwner || !hiddenForOwner.includes(key));
+  const order = (engagement.data ?? defaultOrder).filter(key => (!isOwner || !hiddenForOwner.includes(key)) && !(key === "gift" && (viewingAsPage || taggedProject)));
   const ownerActions: ActionItem[] = isOwner ? [
     { key: "prioritize", icon: "rocket-outline", label: "Prioritize", onPress: () => closeAnd(confirmPrioritize) },
     { key: "promote", icon: "bullhorn-outline", label: "Promote", onPress: () => closeAnd(() => comingSoon("Promote")) },
