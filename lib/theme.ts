@@ -19,6 +19,9 @@ export const lightColors = {
   accentSoft: "#E3E9E1",
   border: "#E9E4D8",
   danger: "#A64B3F",
+  // Muted warm gold/ochre — the Pushback stance, and FollowButton's
+  // "follow back" tint. Web's --color-pushback.
+  pushback: "#B8862E",
   // Saturated sage for the few spots that need to pop against a list
   // (jump-to-post flash, unread rows) — web's --color-highlight.
   highlight: "#BFE6C6",
@@ -38,6 +41,7 @@ export const darkColors = {
   accentSoft: "#17281F",
   border: "#232220",
   danger: "#C97C6B",
+  pushback: "#D9A857",
   highlight: "#1E4B31",
   // Dark-mode counterpart to light mode's #1E4C9A — that navy is far
   // too dark against near-black canvas, so this swaps to a light
@@ -46,6 +50,24 @@ export const darkColors = {
 };
 
 export type ThemeColors = typeof lightColors;
+
+// Overlay chrome — every dismissible surface (Modal, DropdownMenu, and
+// anything built on either). Deliberately theme-INDEPENDENT, exactly as on
+// web (--color-overlay-* in @theme, untouched by .dark): a fixed dark-glass
+// panel with light text, so a confirmation or kebab menu looks the same in
+// light and dark mode. Hence a plain constant rather than part of the
+// light/dark palettes above.
+export const overlayColors = {
+  surface: "#1C1C1E",
+  surfaceRaised: "#2C2C2E",
+  ink: "#F5F5F7",
+  inkMuted: "#98989D",
+  border: "#FFFFFF1F", // ~12% white hairline
+  danger: "#D6968A",
+  dangerSoft: "#4A2E2A",
+  accent: "#8FB89C",
+  accentSoft: "#263831",
+} as const;
 
 // Web's dark mode is a user-toggled `.dark` class on <html> (see
 // useTheme.tsx there), not the OS setting — this native version only

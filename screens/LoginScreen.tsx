@@ -18,6 +18,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { Redirect, useRouter, useLocalSearchParams, Link } from "expo-router";
+import * as Linking from "expo-linking";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { useAddAccount } from "../hooks/useAccountSwitcher";
@@ -95,7 +96,15 @@ export function LoginScreen() {
 
   async function handleResend() {
     setResending(true);
-    const { error: resendError } = await supabase.auth.resend({ type: "signup", email });
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      // Without this the confirmation email links to Supabase's Site URL (the
+      // web app) instead of back into this app — same option VerifyEmailScreen
+      // and SignUpScreen already pass. Web's Login omits it because the
+      // browser origin is already the right place.
+      options: { emailRedirectTo: Linking.createURL("/auth/callback") },
+    });
     setResending(false);
     if (!resendError) {
       setResent(true);
