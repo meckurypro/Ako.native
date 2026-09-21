@@ -1,10 +1,5 @@
-// File: app/auth/callback.tsx
-// Deliberately NOT inside app/(auth)/ — that folder's parens make it a
-// route *group* (no path segment), so a file there maps to /login,
-// /signup, etc. This route needs the literal path "/auth/callback" to
-// match Linking.createURL("/auth/callback") (used by SignUpScreen and
-// ResetPasswordScreen), so it lives at the real app/auth/ path instead.
-//
-// Expo Router convention otherwise unchanged: this file is just the
-// route; the actual UI lives in screens/AuthCallbackScreen.tsx.
-export { AuthCallbackScreen as default } from "../../screens/AuthCallbackScreen";
+import { Redirect, useRouter } from "expo-router";
+import { Button, Screen, Text } from "@/components/core";
+import { useAuthCallback } from "@/features/auth/useAuthCallback";
+import { useAuth } from "@/providers/AuthProvider";
+export default function AuthCallback() { const router=useRouter(); const { status, message } = useAuthCallback(); const { session, isRecovery } = useAuth(); if (status === "recovery" || isRecovery) return <Redirect href="/auth/reset-password" />; if (status === "success" && session) return <Redirect href="/" />; return <Screen contentStyle={{ justifyContent: "center", gap: 12 }}><Text variant="title">{status === "error" ? "Link expired" : "Confirming your link"}</Text><Text color={status === "error" ? "danger" : "secondary"}>{status === "error" ? message ?? "This link is invalid or has already been used." : "Securely restoring your AKọ session…"}</Text>{status === "error" && <Button label="Back to sign in" onPress={() => router.replace("/(auth)/sign-in")} />}</Screen>; }

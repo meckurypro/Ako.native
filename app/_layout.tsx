@@ -1,48 +1,21 @@
-// File: app/_layout.tsx
-import { Stack, type ErrorBoundaryProps } from "expo-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AuthProvider } from "../hooks/useAuth";
-import { AutoHideProvider } from "../hooks/useAutoHideOnScroll";
-import { ToastProvider } from "../components/Toast";
-import { BottomNav } from "../components/BottomNav";
-import { OnboardingGate } from "../components/OnboardingGate";
-import { LoadingOverlay } from "../components/LoadingOverlay";
-import { ErrorFallback } from "../components/ErrorFallback";
+import { useCallback, useState } from "react";
+import { View } from "react-native";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
+import { AppProviders } from "@/providers/AppProviders";
+import { useAuth } from "@/providers/AuthProvider";
+import { useTheme } from "@/providers/ThemeProvider";
+import { AppSplash } from "@/components/feedback/AppSplash";
 
-const queryClient = new QueryClient();
+void SplashScreen.preventAutoHideAsync();
+configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
 
-// expo-router route-level error boundary for the whole app — web's
-// ErrorBoundary equivalent. Renders OUTSIDE the providers below.
-export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
-  return <ErrorFallback error={error} retry={retry} />;
+function AppNavigator() {
+  const { isReady } = useAuth(); const { colors, isDark } = useTheme(); const [showSplash, setShowSplash] = useState(true);
+  const onLayout = useCallback(() => { void SplashScreen.hideAsync(); }, []);
+  return <View onLayout={onLayout} style={{ flex: 1, backgroundColor: colors.background }}><StatusBar style={isDark ? "light" : "dark"} /><Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: "fade_from_bottom" }}><Stack.Screen name="(auth)" /><Stack.Screen name="(onboarding)" /><Stack.Screen name="(tabs)" /><Stack.Screen name="auth/callback" /><Stack.Screen name="auth/reset-password" /><Stack.Screen name="profile/edit" /><Stack.Screen name="modals/create" options={{ presentation: "transparentModal", animation: "fade", contentStyle: { backgroundColor: "transparent" } }} /><Stack.Screen name="modals/logout-confirm" options={{ presentation: "transparentModal", animation: "fade" }} /></Stack>{showSplash && <AppSplash ready={isReady} onFinished={() => setShowSplash(false)} />}</View>;
 }
 
-// The five top-level places switch with `replace` on web (no history
-// stacking, no transition) — animation "none" keeps that feel here.
-const NO_ANIM = { animation: "none" } as const;
-
-export default function RootLayout() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        {/* ToastProvider wraps everything and renders its layer last so
-            toasts sit above the Bottom Nav. */}
-        <ToastProvider>
-          <AutoHideProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="feed" options={NO_ANIM} />
-              <Stack.Screen name="topics" options={NO_ANIM} />
-              <Stack.Screen name="library" options={NO_ANIM} />
-              <Stack.Screen name="inbox" options={NO_ANIM} />
-              <Stack.Screen name="me" options={NO_ANIM} />
-            </Stack>
-            <BottomNav />
-            <OnboardingGate />
-            {/* Blocking-save spinner (mutations tagged meta.blocking). */}
-            <LoadingOverlay />
-          </AutoHideProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
-}
+export default function RootLayout() { return <AppProviders><AppNavigator /></AppProviders>; }

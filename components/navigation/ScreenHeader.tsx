@@ -1,0 +1,3 @@
+import { View } from "react-native";
+import { Heading, Text } from "@/components/core";
+export function ScreenHeader({ eyebrow = "AKọ", title, subtitle, action }: { eyebrow?: string; title: string; subtitle?: string; action?: React.ReactNode }) { return <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, paddingTop: 12, paddingBottom: 8 }}><View style={{ flex: 1 }}><Text variant="caption" color="accent" style={{ letterSpacing: 1.4, textTransform: "uppercase" }}>{eyebrow}</Text><Heading style={{ fontSize: 26, lineHeight: 32, marginTop: 2 }}>{title}</Heading>{subtitle && <Text variant="caption" color="secondary" style={{ marginTop: 3 }}>{subtitle}</Text>}</View>{action}</View>; }
