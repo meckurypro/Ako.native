@@ -1,5 +1,6 @@
+// File: app/_layout.tsx
 import { useCallback, useState } from "react";
-import { View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -7,15 +8,21 @@ import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-rean
 import { AppProviders } from "@/providers/AppProviders";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
+import { AccountAccessError } from "@/components/account/AccountAccessError";
+import { AccountUnderReview } from "@/components/account/AccountUnderReview";
 import { AppSplash } from "@/components/feedback/AppSplash";
+import { useAccountAccess } from "@/features/account/api";
 
 void SplashScreen.preventAutoHideAsync();
 configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
 
 function AppNavigator() {
-  const { isReady } = useAuth(); const { colors, isDark } = useTheme(); const [showSplash, setShowSplash] = useState(true);
+  const { isReady, session } = useAuth(); const { colors, isDark } = useTheme(); const [showSplash, setShowSplash] = useState(true);
+  // Account-review gate (web: RequireAuth + AccountUnderReview). Applies to every route, including deep links, because it replaces the navigator itself. Fails closed: the app stays locked while the check is loading or has failed with no earlier answer.
+  const access = useAccountAccess(); const accessPending = !!session && access.isLoading; const accessFailed = !!session && access.isError && !access.data; const blocked = !!session && access.data?.canAccess === false;
   const onLayout = useCallback(() => { void SplashScreen.hideAsync(); }, []);
-  return <View onLayout={onLayout} style={{ flex: 1, backgroundColor: colors.background }}><StatusBar style={isDark ? "light" : "dark"} /><Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: "fade_from_bottom" }}><Stack.Screen name="(auth)" /><Stack.Screen name="(onboarding)" /><Stack.Screen name="(tabs)" /><Stack.Screen name="auth/callback" /><Stack.Screen name="auth/reset-password" /><Stack.Screen name="profile/edit" /><Stack.Screen name="modals/create" options={{ presentation: "transparentModal", animation: "fade", contentStyle: { backgroundColor: "transparent" } }} /><Stack.Screen name="modals/logout-confirm" options={{ presentation: "transparentModal", animation: "fade" }} /></Stack>{showSplash && <AppSplash ready={isReady} onFinished={() => setShowSplash(false)} />}</View>;
+  const gate = blocked ? <AccountUnderReview /> : accessFailed ? <AccountAccessError onRetry={() => void access.refetch()} retrying={access.isFetching} /> : accessPending ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View> : null;
+  return <View onLayout={onLayout} style={{ flex: 1, backgroundColor: colors.background }}><StatusBar style={isDark ? "light" : "dark"} />{gate ?? <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: "fade_from_bottom" }}><Stack.Screen name="(auth)" /><Stack.Screen name="(onboarding)" /><Stack.Screen name="(tabs)" /><Stack.Screen name="auth/callback" /><Stack.Screen name="auth/reset-password" /><Stack.Screen name="profile/edit" /><Stack.Screen name="modals/create" options={{ presentation: "transparentModal", animation: "fade", contentStyle: { backgroundColor: "transparent" } }} /><Stack.Screen name="modals/logout-confirm" options={{ presentation: "transparentModal", animation: "fade" }} /></Stack>}{showSplash && <AppSplash ready={isReady && !accessPending} onFinished={() => setShowSplash(false)} />}</View>;
 }
 
 export default function RootLayout() { return <AppProviders><AppNavigator /></AppProviders>; }
