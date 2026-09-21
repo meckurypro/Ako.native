@@ -5,6 +5,7 @@ import { AuthProvider } from "../hooks/useAuth";
 import { AutoHideProvider } from "../hooks/useAutoHideOnScroll";
 import { ToastProvider } from "../components/Toast";
 import { BottomNav } from "../components/BottomNav";
+import { OnboardingGate } from "../components/OnboardingGate";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ export default function RootLayout() {
               <Stack.Screen name="me" options={NO_ANIM} />
             </Stack>
             <BottomNav />
+            <OnboardingGate />
           </AutoHideProvider>
         </ToastProvider>
       </AuthProvider>
