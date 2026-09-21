@@ -1,24 +1,16 @@
 // File: app/index.tsx
-// Root route ("/"). Previously always redirected to /login regardless
-// of auth state, which ignored the whole point of lib/supabase.ts
-// persisting sessions to AsyncStorage — a returning signed-in user
-// would get bounced to the login form on every app launch. This now
-// reads useAuth() and sends them onward accordingly, same as
-// LoginScreen already does for the reverse case (signed-in user
-// landing on /login gets redirected past it).
-//
-// FLAG — this doesn't yet do RequireAuth's onboarding-completion
-// check (see web's src/components/RequireAuth.tsx): a signed-in user
-// who never finished onboarding will land on /feed here instead of
-// being routed back into onboarding. That check depends on
-// useOnboardingStatus/useAccountAccess, neither ported yet — revisit
-// this redirect once those exist, the same way RequireAuth will need
-// to.
+// Root route ("/"). Reads useAuth() so a returning signed-in user isn't
+// bounced to the login form on every launch (lib/supabase.ts persists the
+// session to AsyncStorage), and — same rule as web's RequireAuth — sends
+// someone who hasn't finished onboarding back into it instead of /feed:
+// resume at Find People if they already saved interests, else Welcome.
+// (OnboardingGate applies the same rule to every other route.)
 import { useEffect } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { Redirect } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useAuth } from "../hooks/useAuth";
+import { useOnboardingStatus } from "../hooks/useOnboarding";
 import { useTheme } from "../lib/theme";
 
 // Keep the native splash screen up while auth state resolves, instead
@@ -31,15 +23,17 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 export default function Index() {
   const { user, loading } = useAuth();
+  const { data: onboarding, isLoading: onboardingLoading } = useOnboardingStatus();
   const { colors } = useTheme();
+  const resolving = loading || (!!user && onboardingLoading);
 
   useEffect(() => {
-    if (!loading) {
+    if (!resolving) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [loading]);
+  }, [resolving]);
 
-  if (loading) {
+  if (resolving) {
     // Native splash screen is still covering this in the common case
     // (see above); this only becomes visible if hiding it is ever
     // delayed, so it should match the splash's own background rather
@@ -51,5 +45,11 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={user ? "/feed" : "/login"} />;
+  if (!user) return <Redirect href="/login" />;
+  // A failed status lookup (onboarding undefined) falls through to /feed,
+  // same as web's RequireAuth.
+  if (onboarding && !onboarding.completed) {
+    return <Redirect href={onboarding.hasInterests ? "/onboarding/people" : "/onboarding/welcome"} />;
+  }
+  return <Redirect href="/feed" />;
 }
