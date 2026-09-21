@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import { useRouter } from "expo-router";
 import { Avatar, Text } from "@/components/core";
 import { type MobileGiftType, useGiftTypes, useSendGift, useWallet } from "@/features/feed/api";
@@ -63,8 +63,8 @@ export function GiftPicker({ recipientId, recipientName, recipientAvatar, postId
       <Pressable style={[s.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
       <View style={[s.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={[s.header, { borderBottomColor: colors.border }]}>
-          {step === "confirm" ? <Pressable onPress={() => setStep("catalog")} style={s.headerButton}><MaterialCommunityIcons name="arrow-left" size={21} color={colors.textMuted} /></Pressable> : <View><Text maxFontSizeMultiplier={1} style={s.title}>Send a gift</Text><Text maxFontSizeMultiplier={1} color="muted" style={s.subhead}>Send a piece of heritage.</Text></View>}
-          <View style={s.headerRight}>{step === "catalog" && <Text maxFontSizeMultiplier={1} color="muted" style={s.balance}>Balance <Text maxFontSizeMultiplier={1} style={[s.balanceValue, { color: colors.text }]}>${balance.toFixed(2)}</Text></Text>}<Pressable onPress={onClose} style={s.headerButton}><MaterialCommunityIcons name="close" size={21} color={colors.textMuted} /></Pressable></View>
+          {step === "confirm" ? <Pressable onPress={() => setStep("catalog")} style={s.headerButton}><Icon name="arrow-left" size={21} color={colors.textMuted} /></Pressable> : <View><Text maxFontSizeMultiplier={1} style={s.title}>Send a gift</Text><Text maxFontSizeMultiplier={1} color="muted" style={s.subhead}>Send a piece of heritage.</Text></View>}
+          <View style={s.headerRight}>{step === "catalog" && <Text maxFontSizeMultiplier={1} color="muted" style={s.balance}>Balance <Text maxFontSizeMultiplier={1} style={[s.balanceValue, { color: colors.text }]}>${balance.toFixed(2)}</Text></Text>}<Pressable onPress={onClose} style={s.headerButton}><Icon name="x" size={21} color={colors.textMuted} /></Pressable></View>
         </View>
 
         <ScrollView contentContainerStyle={s.content}>

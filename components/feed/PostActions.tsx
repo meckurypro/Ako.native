@@ -1,7 +1,7 @@
 // File: components/feed/PostActions.tsx
 import { Alert, InteractionManager, Modal, Pressable, Share, StyleSheet, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon as GlyphIcon, type IconName } from "@/components/core/Icon";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown, useReducedMotion } from "react-native-reanimated";
@@ -27,18 +27,18 @@ import { StanceComposer } from "./StanceComposer";
 import { GiftPicker } from "./GiftPicker";
 import { LikeHeart } from "./LikeHeart";
 
-type Icon = keyof typeof MaterialCommunityIcons.glyphMap;
+type Icon = IconName;
 type ActionItem = { key: string; icon: Icon; label: string; active?: boolean; count?: string; danger?: boolean; onPress: () => void };
 
 function MainAction({ icon, label, active, onPress, onLongPress }: { icon: Icon; label?: string; active?: boolean; onPress: () => void; onLongPress?: () => void }) {
   const { colors } = useTheme();
-  return <PressableScale accessibilityRole="button" accessibilityLabel={label ?? icon} onPress={onPress} onLongPress={onLongPress} delayLongPress={450} hitSlop={8} style={s.mainAction}>{icon === "heart" || icon === "heart-outline" ? <LikeHeart active={!!active} color="#D98978" /> : <MaterialCommunityIcons name={icon} size={24} color={active ? "#D98978" : colors.text} />}{label ? <Text style={[s.mainCount, { color: active ? "#D98978" : colors.text }]}>{label}</Text> : null}</PressableScale>;
+  return <PressableScale accessibilityRole="button" accessibilityLabel={label ?? icon} onPress={onPress} onLongPress={onLongPress} delayLongPress={450} hitSlop={8} style={s.mainAction}>{icon === "heart" ? <LikeHeart active={!!active} color="#D98978" /> : <GlyphIcon name={icon} size={24} color={active ? "#D98978" : colors.text} fill={active ? "#D98978" : "none"} />}{label ? <Text style={[s.mainCount, { color: active ? "#D98978" : colors.text }]}>{label}</Text> : null}</PressableScale>;
 }
 
 function SheetAction({ item }: { item: ActionItem }) {
   const { colors } = useTheme();
   const color = item.danger ? colors.danger : item.active ? colors.accent : colors.text;
-  return <PressableScale accessibilityRole="button" accessibilityLabel={item.label} onPress={item.onPress} style={s.sheetAction}><MaterialCommunityIcons name={item.icon} size={25} color={color} /><Text color={item.danger ? "danger" : item.active ? "accent" : "secondary"} style={s.sheetLabel}>{item.label}{item.count ? ` (${item.count})` : ""}</Text></PressableScale>;
+  return <PressableScale accessibilityRole="button" accessibilityLabel={item.label} onPress={item.onPress} style={s.sheetAction}><GlyphIcon name={item.icon} size={25} color={color} fill={item.active ? color : "none"} /><Text color={item.danger ? "danger" : item.active ? "accent" : "secondary"} style={s.sheetLabel}>{item.label}{item.count ? ` (${item.count})` : ""}</Text></PressableScale>;
 }
 
 function ActionSheet({ children, colors, onClose }: { children: React.ReactNode; colors: ReturnType<typeof useTheme>["colors"]; onClose: () => void }) {
@@ -103,24 +103,24 @@ export function PostActions({ postId, recipientId, recipientName, recipientAvata
   const confirmArchive = () => isArchived ? archivePost.mutate({ postId, archived: false }, { onError: () => Alert.alert("Couldn't unarchive this post") }) : Alert.alert("Archive this post?", "It will be hidden from your profile and the feed until you unarchive it from your Archive.", [{ text: "Cancel", style: "cancel" }, { text: "Archive", onPress: () => archivePost.mutate({ postId, archived: true }, { onError: () => Alert.alert("Couldn't archive this post") }) }]);
   const confirmDelete = () => Alert.alert("Delete this post?", "This action cannot be undone.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => deletePost.mutate(postId, { onError: () => Alert.alert("Couldn't delete this post") }) }]);
 
-  const action = (key: SecondaryActionKey): ActionItem => key === "support" ? { key, icon: "handshake-outline", label: "Support", count: support ? String(support) : undefined, onPress: () => chooseStance("support") } : key === "reshare" ? { key, icon: "repeat", label: "Reshare", count: shares ? String(shares) : undefined, onPress: chooseReshare } : key === "share" ? { key, icon: "redo", label: "Share", onPress: share } : key === "gift" ? { key, icon: "gift-outline", label: "Gift", onPress: chooseGift } : key === "save" ? { key, icon: bookmark.data ? "bookmark" : "bookmark-outline", label: bookmark.data ? "Saved" : "Save", active: !!bookmark.data, onPress: saved } : key === "disagree" ? { key, icon: "emoticon-sad-outline", label: "Disagree", count: disagree ? String(disagree) : undefined, onPress: () => chooseStance("disagree") } : key === "pushback" ? { key, icon: "hand-back-right-outline", label: "Pushback", count: pushback ? String(pushback) : undefined, onPress: () => chooseStance("pushback") } : { key, icon: dislike.data ? "thumb-down" : "thumb-down-outline", label: dislike.data ? "Disliked" : "Dislike", active: !!dislike.data, count: _dislikes ? String(_dislikes) : undefined, onPress: () => void react("dislike") };
+  const action = (key: SecondaryActionKey): ActionItem => key === "support" ? { key, icon: "handshake", label: "Support", count: support ? String(support) : undefined, onPress: () => chooseStance("support") } : key === "reshare" ? { key, icon: "repeat-2", label: "Reshare", count: shares ? String(shares) : undefined, onPress: chooseReshare } : key === "share" ? { key, icon: "redo-2", label: "Share", onPress: share } : key === "gift" ? { key, icon: "gift", label: "Gift", onPress: chooseGift } : key === "save" ? { key, icon: "bookmark", label: bookmark.data ? "Saved" : "Save", active: !!bookmark.data, onPress: saved } : key === "disagree" ? { key, icon: "frown", label: "Disagree", count: disagree ? String(disagree) : undefined, onPress: () => chooseStance("disagree") } : key === "pushback" ? { key, icon: "hand", label: "Pushback", count: pushback ? String(pushback) : undefined, onPress: () => chooseStance("pushback") } : { key, icon: "thumbs-down", label: dislike.data ? "Disliked" : "Dislike", active: !!dislike.data, count: _dislikes ? String(_dislikes) : undefined, onPress: () => void react("dislike") };
 
   const defaultOrder: SecondaryActionKey[] = ["support", "reshare", "share", "gift", "save", "disagree", "pushback", "dislike"];
   const hiddenForOwner: SecondaryActionKey[] = ["reshare", "gift", "disagree", "pushback", "dislike"];
   const order = (engagement.data ?? defaultOrder).filter(key => (!isOwner || !hiddenForOwner.includes(key)) && !(key === "gift" && (viewingAsPage || taggedProject)) && !(key === "reshare" && hasReshared.data));
   const ownerActions: ActionItem[] = isOwner ? [
-    { key: "prioritize", icon: isPrioritizedToday ? "rocket" : "rocket-outline", label: isPrioritizedToday ? "Prioritized today" : "Prioritize", active: isPrioritizedToday, onPress: () => closeAnd(isPrioritizedToday ? () => {} : confirmPrioritize) },
-    { key: "promote", icon: "bullhorn-outline", label: "Promote", onPress: () => closeAnd(() => comingSoon("Promote")) },
-    { key: "tag-people", icon: "tag-outline", label: "Tag people", onPress: () => closeAnd(() => comingSoon("Tag people")) },
-    { key: "collaborators", icon: "account-group-outline", label: "Collaborators", onPress: () => closeAnd(() => comingSoon("Collaborators")) },
-    { key: "archive", icon: isArchived ? "archive-arrow-up-outline" : "archive-outline", label: isArchived ? "Unarchive" : "Archive", onPress: () => closeAnd(confirmArchive) },
-    { key: "delete", icon: "trash-can-outline", label: "Delete", danger: true, onPress: () => closeAnd(confirmDelete) },
+    { key: "prioritize", icon: "rocket", label: isPrioritizedToday ? "Prioritized today" : "Prioritize", active: isPrioritizedToday, onPress: () => closeAnd(isPrioritizedToday ? () => {} : confirmPrioritize) },
+    { key: "promote", icon: "megaphone", label: "Promote", onPress: () => closeAnd(() => comingSoon("Promote")) },
+    { key: "tag-people", icon: "tag", label: "Tag people", onPress: () => closeAnd(() => comingSoon("Tag people")) },
+    { key: "collaborators", icon: "users", label: "Collaborators", onPress: () => closeAnd(() => comingSoon("Collaborators")) },
+    { key: "archive", icon: isArchived ? "rotate-ccw" : "archive", label: isArchived ? "Unarchive" : "Archive", onPress: () => closeAnd(confirmArchive) },
+    { key: "delete", icon: "trash-2", label: "Delete", danger: true, onPress: () => closeAnd(confirmDelete) },
   ] : [];
   const moreActions = [...order.map(action), ...ownerActions];
   const middle = moreActions.slice(0, 3);
 
   return <>
-    <View style={s.actionBlock}><View pointerEvents={disabled ? "none" : "auto"} style={[s.row, disabled && { opacity: 0.4 }]}><MainAction icon={like.data ? "heart" : "heart-outline"} label={likes ? String(likes) : undefined} active={!!like.data} onPress={() => void react("like")} onLongPress={() => setMore(true)}/>{middle.map(item => <MainAction key={item.key} icon={item.icon} label={item.count} active={item.active} onPress={item.onPress} onLongPress={() => setMore(true)}/>)}<MainAction icon="dots-horizontal" onPress={() => setMore(true)}/></View><Pressable onPress={onComments} hitSlop={7} style={s.comments}><Text color="secondary" style={s.commentsText}>Comments: {comments}</Text></Pressable></View>
+    <View style={s.actionBlock}><View pointerEvents={disabled ? "none" : "auto"} style={[s.row, disabled && { opacity: 0.4 }]}><MainAction icon="heart" label={likes ? String(likes) : undefined} active={!!like.data} onPress={() => void react("like")} onLongPress={() => setMore(true)}/>{middle.map(item => <MainAction key={item.key} icon={item.icon} label={item.count} active={item.active} onPress={item.onPress} onLongPress={() => setMore(true)}/>)}<MainAction icon="more-horizontal" onPress={() => setMore(true)}/></View><Pressable onPress={onComments} hitSlop={7} style={s.comments}><Text color="secondary" style={s.commentsText}>Comments: {comments}</Text></Pressable></View>
     {more && <ActionSheet colors={colors} onClose={() => setMore(false)}><View style={s.grid}>{moreActions.map(item => <SheetAction key={item.key} item={{ ...item, onPress: () => closeAnd(item.onPress) }} />)}</View><Pressable onPress={() => setMore(false)} style={[s.cancel, { borderTopColor: colors.border }]}><Text color="secondary" style={s.cancelText}>Cancel</Text></Pressable></ActionSheet>}
     {stance && <StanceComposer postId={postId} initial={stance} onClose={() => setStance(null)}/>}
     {Boolean(gift && giftRecipientId && giftRecipientName) && <GiftPicker recipientId={giftRecipientId!} recipientName={giftRecipientName!} recipientAvatar={giftRecipientAvatar} postId={postId} onClose={() => setGift(false)}/>}

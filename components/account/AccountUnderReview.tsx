@@ -1,7 +1,7 @@
 // File: components/account/AccountUnderReview.tsx
 import { useState } from "react";
 import { View } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import { Button, Screen, Text } from "@/components/core";
 import { friendlyAuthError } from "@/features/auth/validation";
 import { useAuth } from "@/providers/AuthProvider";
@@ -22,7 +22,7 @@ export function AccountUnderReview() {
     <Screen scroll={false} contentStyle={{ justifyContent: "center", alignItems: "center" }}>
       <View style={{ maxWidth: 320, alignItems: "center" }}>
         <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
-          <MaterialCommunityIcons name="clock-outline" size={28} color={colors.accent} />
+          <Icon name="clock-3" size={28} color={colors.accent} />
         </View>
         <Text variant="title" align="center" style={{ marginBottom: 8 }}>Your Akọ account is under review</Text>
         <Text color="secondary" align="center" style={{ marginBottom: 4 }}>We’re carefully welcoming people into Akọ during this early period. Your account has been received and is currently being reviewed.</Text>

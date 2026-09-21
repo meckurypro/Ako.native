@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, View } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import { Avatar, Text } from "@/components/core";
 import { useCommentReaction, useComments, useReplies, useToggleCommentReaction } from "@/features/feed/api";
 import type { Comment, Stance } from "@/features/feed/types";
@@ -22,7 +22,7 @@ export function CommentSheet({ postId, count, onClose }: { postId: string; count
         <View style={[s.handle, { backgroundColor: colors.border }]} />
         <View style={[s.head, { borderBottomColor: colors.border }]}>
           <Text style={s.title}>Comments <Text color="secondary" style={s.titleCount}>{count}</Text></Text>
-          <Pressable accessibilityLabel="Close comments" onPress={onClose} style={s.close}><MaterialCommunityIcons name="close" size={22} color={colors.textMuted} /></Pressable>
+          <Pressable accessibilityLabel="Close comments" onPress={onClose} style={s.close}><Icon name="x" size={22} color={colors.textMuted} /></Pressable>
         </View>
         <ScrollView contentContainerStyle={s.list} keyboardShouldPersistTaps="handled">
           {comments.isLoading ? <ActivityIndicator color={colors.accent} style={s.loading} /> : comments.isError ? <Text color="danger" align="center" style={s.empty}>Couldn’t load comments.</Text> : comments.data?.length ? comments.data.map(comment => <CommentThread key={comment.id} postId={postId} comment={comment} onCompose={(stance, parentId) => setComposer({ stance, parentId })} />) : <Text color="muted" align="center" style={s.empty}>No comments yet. Start the reasoning.</Text>}
@@ -57,15 +57,15 @@ function CommentThread({ postId, comment, depth, onCompose }: { postId: string; 
           {comment.stance && <View style={[s.stance, { backgroundColor: `${stanceColor(comment.stance)}26` }]}><Text style={[s.stanceText, { color: stanceColor(comment.stance) }]}>{label(comment.stance)}</Text></View>}
           <Text color="muted" style={s.time}>{age(comment.created_at)}</Text>
         </View></View>
-        <Pressable accessibilityLabel="Comment options" onPress={() => setMenu(value => !value)} style={s.more}><MaterialCommunityIcons name="dots-horizontal" size={19} color={colors.textMuted} /></Pressable>
+        <Pressable accessibilityLabel="Comment options" onPress={() => setMenu(value => !value)} style={s.more}><Icon name="more-horizontal" size={19} color={colors.textMuted} /></Pressable>
       </View>
       <Text style={[s.commentText, depth ? s.replyText : null]}>{comment.content}</Text>
       <View style={[s.commentActions, depth ? s.replyActions : null]}>
-        <Pressable disabled={toggleLike.isPending} onPress={() => void toggleLike.mutateAsync(!!liked.data)} style={s.iconAction}><MaterialCommunityIcons name={liked.data ? "heart" : "heart-outline"} size={19} color="#D98978" />{comment.like_count > 0 && <Text style={[s.reactionCount, liked.data && { color: "#D98978" }]}>{comment.like_count}</Text>}</Pressable>
-        <Pressable disabled={toggleDislike.isPending} onPress={() => void toggleDislike.mutateAsync(!!disliked.data)} style={s.iconAction}><MaterialCommunityIcons name={disliked.data ? "thumb-down" : "thumb-down-outline"} size={18} color={disliked.data ? "#D98978" : colors.textMuted} />{comment.dislike_count > 0 && <Text style={[s.reactionCount, disliked.data && { color: "#D98978" }]}>{comment.dislike_count}</Text>}</Pressable>
+        <Pressable disabled={toggleLike.isPending} onPress={() => void toggleLike.mutateAsync(!!liked.data)} style={s.iconAction}><Icon name="heart" size={19} color="#D98978" fill={liked.data ? "#D98978" : "none"} />{comment.like_count > 0 && <Text style={[s.reactionCount, liked.data && { color: "#D98978" }]}>{comment.like_count}</Text>}</Pressable>
+        <Pressable disabled={toggleDislike.isPending} onPress={() => void toggleDislike.mutateAsync(!!disliked.data)} style={s.iconAction}><Icon name="thumbs-down" size={18} color={disliked.data ? "#D98978" : colors.textMuted} fill={disliked.data ? "#D98978" : "none"} />{comment.dislike_count > 0 && <Text style={[s.reactionCount, disliked.data && { color: "#D98978" }]}>{comment.dislike_count}</Text>}</Pressable>
         {(["support", "disagree", "pushback"] as Stance[]).map(stance => <Pressable key={stance} onPress={() => onCompose(stance, comment.id)}><Text style={s.commentAction}>{label(stance)}</Text></Pressable>)}
       </View>
-      {menu && <View style={[s.commentMenu, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}><Pressable onPress={() => void share()} style={s.menuOption}><MaterialCommunityIcons name="share-variant-outline" size={18} color={colors.text} /><Text>Share</Text></Pressable></View>}
+      {menu && <View style={[s.commentMenu, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}><Pressable onPress={() => void share()} style={s.menuOption}><Icon name="share-2" size={18} color={colors.text} /><Text>Share</Text></Pressable></View>}
     </View>
     {hasReplies && <Pressable onPress={() => setExpanded(value => !value)} style={[s.repliesToggle, { marginLeft: depth ? 42 : 42 }]}><View style={[s.replyRule, { backgroundColor: colors.border }]} /><Text style={[s.repliesText, { color: colors.accent }]}>{expanded ? "Hide replies" : `${comment.reply_count || replies.data?.length || 0} ${comment.reply_count === 1 ? "reply" : "replies"}`}</Text></Pressable>}
     {expanded && <View>{replies.isLoading ? <ActivityIndicator color={colors.accent} style={s.replyLoading} /> : replies.data?.map(reply => <CommentThread key={reply.id} postId={postId} comment={reply} depth={(depth ?? 0) + 1} onCompose={onCompose} />)}</View>}

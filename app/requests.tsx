@@ -82,7 +82,7 @@ export default function FollowRequestsScreen() {
           onRefresh={() => void requests.refetch()}
           ListEmptyComponent={
             !requests.isLoading ? (
-              <EmptyState icon="account-clock-outline" title="No requests" message="No pending follow requests." />
+              <EmptyState icon="user-check" title="No requests" message="No pending follow requests." />
             ) : null
           }
         />

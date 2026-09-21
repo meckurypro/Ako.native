@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ActivityIndicator, Platform, FlatList, Pressable, Share, StyleSheet, View } from "react-native";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/core/Icon";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -67,24 +67,24 @@ export default function ActivityDetail() {
   }
 
   const projects: any[] = kind === "affiliates" ? affiliates.data?.map((x: any) => x.project).filter(Boolean) ?? [] : [];
-  return <View style={[s.root, { backgroundColor: colors.background }]}><View style={[s.header, { borderBottomColor: colors.border }]}><Pressable onPress={() => router.back()} style={s.back}><MaterialCommunityIcons name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.title}>{titles[kind] ?? "Activity"}</Text></View>{affiliates.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={projects} keyExtractor={(item: any, index) => item.id ?? `${index}`} contentContainerStyle={s.list} ItemSeparatorComponent={() => <View style={{ height: 14 }} />} ListEmptyComponent={<Text color="muted" align="center" style={s.empty}>Nothing here yet.</Text>} renderItem={({ item }: any) => <ProjectRow item={item.value ?? item} kind={kind ?? ""} />} />}</View>;
+  return <View style={[s.root, { backgroundColor: colors.background }]}><View style={[s.header, { borderBottomColor: colors.border }]}><Pressable onPress={() => router.back()} style={s.back}><Icon name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.title}>{titles[kind] ?? "Activity"}</Text></View>{affiliates.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={projects} keyExtractor={(item: any, index) => item.id ?? `${index}`} contentContainerStyle={s.list} ItemSeparatorComponent={() => <View style={{ height: 14 }} />} ListEmptyComponent={<Text color="muted" align="center" style={s.empty}>Nothing here yet.</Text>} renderItem={({ item }: any) => <ProjectRow item={item.value ?? item} kind={kind ?? ""} />} />}</View>;
 }
 
 function PlainHeader({ title }: { title: string }) {
   const router = useRouter();
   const { colors } = useTheme();
-  return <View style={[s.plainHeader, { backgroundColor: colors.background }]}><Pressable onPress={() => router.back()} style={s.back}><Feather name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.savedTitle}>{title}</Text></View>;
+  return <View style={[s.plainHeader, { backgroundColor: colors.background }]}><Pressable onPress={() => router.back()} style={s.back}><Icon name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.savedTitle}>{title}</Text></View>;
 }
 
 function HubHeader({ title, tab, onChange }: { title: string; tab: HubTab; onChange: (tab: HubTab) => void }) {
   const router = useRouter();
   const { colors } = useTheme();
-  return <View style={[s.savedHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}><View style={s.savedTitleRow}><Pressable onPress={() => router.back()} style={s.back}><Feather name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.savedTitle}>{title}</Text></View><View style={[s.savedTabs, { borderBottomColor: colors.border }]}><Pressable onPress={() => onChange("posts")} style={s.savedTab}><Text style={[s.savedTabText, { color: tab === "posts" ? colors.accent : colors.textMuted }]}>Posts</Text></Pressable><Pressable onPress={() => onChange("projects")} style={s.savedTab}><Text style={[s.savedTabText, { color: tab === "projects" ? colors.accent : colors.textMuted }]}>Projects</Text></Pressable><View style={[s.savedTabLine, { backgroundColor: colors.accent, left: tab === "posts" ? 0 : "50%" }]} /></View></View>;
+  return <View style={[s.savedHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}><View style={s.savedTitleRow}><Pressable onPress={() => router.back()} style={s.back}><Icon name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.savedTitle}>{title}</Text></View><View style={[s.savedTabs, { borderBottomColor: colors.border }]}><Pressable onPress={() => onChange("posts")} style={s.savedTab}><Text style={[s.savedTabText, { color: tab === "posts" ? colors.accent : colors.textMuted }]}>Posts</Text></Pressable><Pressable onPress={() => onChange("projects")} style={s.savedTab}><Text style={[s.savedTabText, { color: tab === "projects" ? colors.accent : colors.textMuted }]}>Projects</Text></Pressable><View style={[s.savedTabLine, { backgroundColor: colors.accent, left: tab === "posts" ? 0 : "50%" }]} /></View></View>;
 }
 
 function HubPostCard({ post, showDelete }: { post: any; showDelete: boolean }) {
   const { colors } = useTheme();
-  return <View style={s.savedPostWrap}><PostCard post={post} />{showDelete ? <Pressable style={[s.deletePill, { backgroundColor: colors.danger }]}><Feather name="trash-2" size={13} color="#120B09" /><Text style={s.deleteText}>Delete</Text></Pressable> : null}</View>;
+  return <View style={s.savedPostWrap}><PostCard post={post} />{showDelete ? <Pressable style={[s.deletePill, { backgroundColor: colors.danger }]}><Icon name="trash-2" size={13} color="#120B09" /><Text style={s.deleteText}>Delete</Text></Pressable> : null}</View>;
 }
 
 function DraftCard({ draft }: { draft: any }) {
@@ -92,12 +92,12 @@ function DraftCard({ draft }: { draft: any }) {
   const { colors } = useTheme();
   const date = draft.category_id ? new Date(draft.created_at).toLocaleDateString() : null;
   const preview = draft.content?.trim() || "(No text yet - just media or a heading.)";
-  return <View style={[s.draftCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={s.draftMeta}><View style={[s.draftChip, { backgroundColor: colors.background, borderColor: colors.border }]}><Text color="secondary" style={s.draftChipText}>Draft</Text></View>{date ? <Text color="muted" style={s.draftDate}>{date}</Text> : null}</View>{draft.heading ? <Text numberOfLines={1} style={s.draftHeading}>{draft.heading}</Text> : null}<Text color="secondary" numberOfLines={3} style={s.draftPreview}>{preview}</Text><View style={s.draftActions}><Pressable onPress={() => router.push({ pathname: "/modals/create", params: { draftId: draft.id } } as any)} style={[s.resumeButton, { backgroundColor: colors.accent }]}><Text style={[s.resumeText, { color: colors.background }]}>Resume</Text></Pressable><Pressable accessibilityLabel="Discard draft" style={[s.discardButton, { borderColor: colors.border }]}><Feather name="trash-2" size={16} color={colors.textSecondary} /></Pressable></View></View>;
+  return <View style={[s.draftCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={s.draftMeta}><View style={[s.draftChip, { backgroundColor: colors.background, borderColor: colors.border }]}><Text color="secondary" style={s.draftChipText}>Draft</Text></View>{date ? <Text color="muted" style={s.draftDate}>{date}</Text> : null}</View>{draft.heading ? <Text numberOfLines={1} style={s.draftHeading}>{draft.heading}</Text> : null}<Text color="secondary" numberOfLines={3} style={s.draftPreview}>{preview}</Text><View style={s.draftActions}><Pressable onPress={() => router.push({ pathname: "/modals/create", params: { draftId: draft.id } } as any)} style={[s.resumeButton, { backgroundColor: colors.accent }]}><Text style={[s.resumeText, { color: colors.background }]}>Resume</Text></Pressable><Pressable accessibilityLabel="Discard draft" style={[s.discardButton, { borderColor: colors.border }]}><Icon name="trash-2" size={16} color={colors.textSecondary} /></Pressable></View></View>;
 }
 
 function DraftEmpty() {
   const { colors } = useTheme();
-  return <View style={s.draftEmpty}><Feather name="edit-3" size={32} color={colors.textMuted} /><Text style={s.emptyTitle}>No drafts yet</Text><Text color="secondary" align="center" style={s.emptyMessage}>Start a post and choose Save as draft instead of posting. It will show up here.</Text></View>;
+  return <View style={s.draftEmpty}><Icon name="file-edit" size={32} color={colors.textMuted} /><Text style={s.emptyTitle}>No drafts yet</Text><Text color="secondary" align="center" style={s.emptyMessage}>Start a post and choose Save as draft instead of posting. It will show up here.</Text></View>;
 }
 
 function timeUntil(iso?: string | null) {
@@ -117,12 +117,12 @@ function ScheduledCard({ post }: { post: any }) {
   const { colors } = useTheme();
   const preview = post.content?.trim() || "(No text yet.)";
   const when = post.scheduled_for ? new Date(post.scheduled_for).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null;
-  return <View style={[s.scheduledCard, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}><View style={s.scheduledTop}><View style={s.scheduledStatus}><Feather name="send" size={12} color={colors.accent} /><Text color="accent" style={s.scheduledStatusText}>Publishes {timeUntil(post.scheduled_for)}</Text></View><Pressable accessibilityLabel="Cancel scheduled post" style={s.cancelScheduled}><Feather name="x" size={16} color={colors.textSecondary} /></Pressable></View>{post.heading ? <Text numberOfLines={1} style={s.draftHeading}>{post.heading}</Text> : null}<Text color="secondary" numberOfLines={3} style={s.draftPreview}>{preview}</Text>{when ? <Text color="muted" style={s.scheduledDate}>{when}</Text> : null}<View style={s.draftActions}><Pressable onPress={() => router.push({ pathname: "/modals/create", params: { scheduledId: post.id } } as any)} style={[s.resumeButton, { backgroundColor: colors.accent }]}><View style={s.resumeContent}><Feather name="edit-3" size={14} color={colors.background} /><Text style={[s.resumeText, { color: colors.background }]}>Resume</Text></View></Pressable></View></View>;
+  return <View style={[s.scheduledCard, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}><View style={s.scheduledTop}><View style={s.scheduledStatus}><Icon name="send" size={12} color={colors.accent} /><Text color="accent" style={s.scheduledStatusText}>Publishes {timeUntil(post.scheduled_for)}</Text></View><Pressable accessibilityLabel="Cancel scheduled post" style={s.cancelScheduled}><Icon name="x" size={16} color={colors.textSecondary} /></Pressable></View>{post.heading ? <Text numberOfLines={1} style={s.draftHeading}>{post.heading}</Text> : null}<Text color="secondary" numberOfLines={3} style={s.draftPreview}>{preview}</Text>{when ? <Text color="muted" style={s.scheduledDate}>{when}</Text> : null}<View style={s.draftActions}><Pressable onPress={() => router.push({ pathname: "/modals/create", params: { scheduledId: post.id } } as any)} style={[s.resumeButton, { backgroundColor: colors.accent }]}><View style={s.resumeContent}><Icon name="file-edit" size={14} color={colors.background} /><Text style={[s.resumeText, { color: colors.background }]}>Resume</Text></View></Pressable></View></View>;
 }
 
 function ScheduledEmpty() {
   const { colors } = useTheme();
-  return <View style={s.draftEmpty}><Feather name="send" size={32} color={colors.textMuted} /><Text style={s.emptyTitle}>Nothing scheduled</Text><Text color="secondary" align="center" style={s.emptyMessage}>Choose Schedule instead of posting to queue something for later. It will show up here.</Text></View>;
+  return <View style={s.draftEmpty}><Icon name="send" size={32} color={colors.textMuted} /><Text style={s.emptyTitle}>Nothing scheduled</Text><Text color="secondary" align="center" style={s.emptyMessage}>Choose Schedule instead of posting to queue something for later. It will show up here.</Text></View>;
 }
 
 function HistoryRow({ item }: { item: any }) {
@@ -135,12 +135,12 @@ function HistoryRow({ item }: { item: any }) {
   const thumbnail = isPost ? null : value.thumbnail_url;
   const date = new Date(item.viewedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const open = () => isPost ? router.push({ pathname: "/posts/[postId]", params: { postId: value.id } }) : undefined;
-  return <Pressable onPress={open} style={[s.historyRow, { borderBottomColor: colors.border }]}><View style={[s.historyThumb, { backgroundColor: colors.surface }]}>{thumbnail ? <Image source={{ uri: thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Feather name={isPost ? "file-text" : "image"} size={16} color={colors.textMuted} />}</View><View style={s.historyCopy}><Text numberOfLines={1} style={s.historyTitle}>{title}</Text><Text color="muted" style={s.historySubtitle}>{subtitle}</Text></View><Text color="muted" style={s.historyDate}>{date}</Text></Pressable>;
+  return <Pressable onPress={open} style={[s.historyRow, { borderBottomColor: colors.border }]}><View style={[s.historyThumb, { backgroundColor: colors.surface }]}>{thumbnail ? <Image source={{ uri: thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name={isPost ? "file-text" : "image"} size={16} color={colors.textMuted} />}</View><View style={s.historyCopy}><Text numberOfLines={1} style={s.historyTitle}>{title}</Text><Text color="muted" style={s.historySubtitle}>{subtitle}</Text></View><Text color="muted" style={s.historyDate}>{date}</Text></Pressable>;
 }
 
 function HistoryEmpty() {
   const { colors } = useTheme();
-  return <View style={s.historyEmpty}><Feather name="clock" size={24} color={colors.textMuted} /><Text color="muted" align="center" style={s.emptyMessage}>Posts and projects you open will show up here, most recent first.</Text></View>;
+  return <View style={s.historyEmpty}><Icon name="history" size={24} color={colors.textMuted} /><Text color="muted" align="center" style={s.emptyMessage}>Posts and projects you open will show up here, most recent first.</Text></View>;
 }
 
 function EventSection({ title, rows }: { title: string; rows: any[] }) {
@@ -153,12 +153,12 @@ function EventRow({ item }: { item: any }) {
   const label = item.kind ?? "Event";
   const when = item.when ? new Date(item.when).toLocaleString() : "Date TBA";
   const title = item.title ?? "Project";
-  return <Pressable style={[s.eventRow, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[s.eventThumb, { backgroundColor: colors.background }]}>{item.thumbnail_url ? <Image source={{ uri: item.thumbnail_url }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Feather name="image" size={18} color={colors.textMuted} />}</View><View style={s.eventCopy}><Text numberOfLines={1} style={s.eventTitle}>{title}</Text><Text color="muted" numberOfLines={1} style={s.eventMeta}>{label} · {when}</Text></View></Pressable>;
+  return <Pressable style={[s.eventRow, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[s.eventThumb, { backgroundColor: colors.background }]}>{item.thumbnail_url ? <Image source={{ uri: item.thumbnail_url }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name="image" size={18} color={colors.textMuted} />}</View><View style={s.eventCopy}><Text numberOfLines={1} style={s.eventTitle}>{title}</Text><Text color="muted" numberOfLines={1} style={s.eventMeta}>{label} · {when}</Text></View></Pressable>;
 }
 
 function EventsEmpty() {
   const { colors } = useTheme();
-  return <View style={s.eventsEmpty}><MaterialCommunityIcons name="calendar-clock-outline" size={24} color={colors.textMuted} /><Text color="muted" align="center" style={s.emptyMessage}>{"Events, meetings, and rooms you've joined will show up here."}</Text></View>;
+  return <View style={s.eventsEmpty}><Icon name="calendar-clock" size={24} color={colors.textMuted} /><Text color="muted" align="center" style={s.emptyMessage}>{"Events, meetings, and rooms you've joined will show up here."}</Text></View>;
 }
 
 function formatUsd(amount: number | string | null | undefined) {
@@ -185,7 +185,7 @@ function AffiliateCard({ relationship }: { relationship: any }) {
     const url = affiliateLinkFor(relationship.project_id, relationship.referral_token);
     void Share.share({ title: project?.title, message: url, url });
   };
-  return <View style={[s.affiliateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={s.affiliateTop}><View style={[s.affiliateThumb, { backgroundColor: colors.background }]}>{project.thumbnail_url ? <Image source={{ uri: project.thumbnail_url }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Feather name="image" size={18} color={colors.textMuted} />}</View><View style={s.affiliateCopy}><Text numberOfLines={1} style={s.affiliateTitle}>{project.title}</Text><Text color="muted" style={s.affiliatePrice}>{formatUsd(effectivePrice(project))}</Text></View>{relationship.status === "revoked" ? <Text color="muted" style={s.revokedText}>Revoked</Text> : <Pressable onPress={share} accessibilityLabel="Copy link" style={s.copyButton}><Feather name="copy" size={16} color={colors.accent} /></Pressable>}</View>{relationship.status === "active" ? <View style={s.affiliateStats}><MiniStat label="Clicks" value={String(dashboard.data?.clicks ?? 0)} /><MiniStat label="Sales" value={String(dashboard.data?.completed_sales ?? 0)} /><MiniStat label="Pending" value={formatUsd(dashboard.data?.pending_commission ?? 0)} /><MiniStat label="Paid" value={formatUsd(dashboard.data?.paid_commission ?? 0)} /></View> : null}</View>;
+  return <View style={[s.affiliateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={s.affiliateTop}><View style={[s.affiliateThumb, { backgroundColor: colors.background }]}>{project.thumbnail_url ? <Image source={{ uri: project.thumbnail_url }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name="image" size={18} color={colors.textMuted} />}</View><View style={s.affiliateCopy}><Text numberOfLines={1} style={s.affiliateTitle}>{project.title}</Text><Text color="muted" style={s.affiliatePrice}>{formatUsd(effectivePrice(project))}</Text></View>{relationship.status === "revoked" ? <Text color="muted" style={s.revokedText}>Revoked</Text> : <Pressable onPress={share} accessibilityLabel="Copy link" style={s.copyButton}><Icon name="copy" size={16} color={colors.accent} /></Pressable>}</View>{relationship.status === "active" ? <View style={s.affiliateStats}><MiniStat label="Clicks" value={String(dashboard.data?.clicks ?? 0)} /><MiniStat label="Sales" value={String(dashboard.data?.completed_sales ?? 0)} /><MiniStat label="Pending" value={formatUsd(dashboard.data?.pending_commission ?? 0)} /><MiniStat label="Paid" value={formatUsd(dashboard.data?.paid_commission ?? 0)} /></View> : null}</View>;
 }
 
 function MiniStat({ label, value }: { label: string; value: string }) {
@@ -194,12 +194,12 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function AffiliateEmpty() {
   const { colors } = useTheme();
-  return <View style={s.affiliateEmpty}><Feather name="trending-up" size={24} color={colors.textMuted} /><Text color="muted" align="center" style={s.emptyMessage}>{"Projects you fork to earn a commission on will show up here — look for \"Share & earn\" on any project that has affiliate forking turned on."}</Text></View>;
+  return <View style={s.affiliateEmpty}><Icon name="trending-up" size={24} color={colors.textMuted} /><Text color="muted" align="center" style={s.emptyMessage}>{"Projects you fork to earn a commission on will show up here — look for \"Share & earn\" on any project that has affiliate forking turned on."}</Text></View>;
 }
 
 function ProjectRow({ item, kind }: { item: any; kind: string }) {
   const { colors } = useTheme();
-  return <View style={[s.project, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name={kind === "events" ? "calendar-clock-outline" : "folder-outline"} size={22} color={colors.accent} /><View style={{ flex: 1 }}><Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "600" }}>{item.title ?? "Project"}</Text><Text color="secondary" numberOfLines={1} style={{ fontSize: 12 }}>{item.when ? new Date(item.when).toLocaleString() : item.description ?? "Project"}</Text></View></View>;
+  return <View style={[s.project, { backgroundColor: colors.surface, borderColor: colors.border }]}><Icon name={kind === "events" ? "calendar-clock" : "image"} size={22} color={colors.accent} /><View style={{ flex: 1 }}><Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "600" }}>{item.title ?? "Project"}</Text><Text color="secondary" numberOfLines={1} style={{ fontSize: 12 }}>{item.when ? new Date(item.when).toLocaleString() : item.description ?? "Project"}</Text></View></View>;
 }
 
 function FeedIcon({ color }: { color: string }) {
@@ -217,10 +217,10 @@ function BottomNavigation() {
   const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 34) : insets.bottom;
   const items = [
     { label: "Feed", onPress: () => router.push("/(tabs)/home"), icon: <FeedIcon color={colors.textMuted} /> },
-    { label: "Discover", onPress: () => router.push("/(tabs)/discover"), icon: <Feather name="search" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Discover", onPress: () => router.push("/(tabs)/discover"), icon: <Icon name="search" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
     { label: "Library", onPress: () => router.push("/(tabs)/create"), icon: <LibraryIcon color={colors.textMuted} /> },
-    { label: "Messages", onPress: () => router.push("/(tabs)/inbox"), icon: <Feather name="message-circle" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
-    { label: "Profile", onPress: () => router.push("/(tabs)/profile"), icon: <Feather name="user" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Messages", onPress: () => router.push("/(tabs)/inbox"), icon: <Icon name="message-circle" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
+    { label: "Profile", onPress: () => router.push("/(tabs)/profile"), icon: <Icon name="user" size={24} color={colors.textMuted} strokeWidth={1.75} /> },
   ];
   return <View style={[s.bottomNav, { backgroundColor: colors.surface, borderTopColor: colors.border, height: 76 + bottomInset, paddingBottom: bottomInset }]}>{items.map((item) => <Pressable key={item.label} onPress={item.onPress} style={s.navItem}>{item.icon}<Text color="muted" style={s.navLabel}>{item.label}</Text></Pressable>)}</View>;
 }
