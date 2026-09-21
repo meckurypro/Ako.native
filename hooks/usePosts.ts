@@ -7,15 +7,21 @@
 // same RPCs (get_ranked_feed, get_following_feed, get_trending_feed,
 // fulfill_gift_tokens), same query keys, same PAGE_SIZE.
 //
+// Also here now — what PostCard reads/writes: canEditPost / POST_EDIT_WINDOW_MS,
+// useHasReshared, usePostViewCount, usePrioritizedPostToday,
+// usePrioritizePost, useDeletePost, useSetPostArchived. (web's
+// DEBUG_DISABLE_PER_CARD_QUERIES gate — a temporary diagnostic, off by
+// default — is not ported.) useDeletePost / useSetPostArchived keep web's
+// `meta: { blocking: true }`, which web's LoadingOverlay listens for; native
+// has no LoadingOverlay yet, so it's inert for now.
+//
 // Deliberately NOT ported yet — port alongside the screens that use them:
-//   - mutations: useCreatePost, useCreateReshare, useUpdatePost,
-//     useDeletePost, useSetPostArchived, usePrioritizePost, and the
-//     draft/scheduled helpers (these also pull in functionErrors and
-//     debugFlags, which don't exist here yet)
-//   - canEditPost / POST_EDIT_WINDOW_MS
-//   - usePagePosts, useHasReshared, usePostViewCount, usePostTopics,
-//     usePrioritizedPostToday, useUserPostsWithArchived
-import { useQuery } from "@tanstack/react-query";
+//   - mutations: useCreatePost, useCreateReshare, useUpdatePost, and the
+//     draft/scheduled helpers (these also pull in lib/functionErrors, which
+//     doesn't exist here yet)
+//   - usePagePosts, usePostTopics, useUserPostsWithArchived
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./useAuth";
 import { PROFILE_ROLES_SELECT, toProfileRoles } from "../lib/profileRoles";
@@ -23,6 +29,7 @@ import { PAGE_SELECT } from "../lib/postSelects";
 import type { PostWithAuthor, RepostSource } from "../types/database";
 
 const PAGE_SIZE = 15;
+export const POST_EDIT_WINDOW_MS = 15 * 60 * 1000;
 
 const AUTHOR_SELECT = `id, username, display_name, avatar_url, tier, is_private, is_verified, ${PROFILE_ROLES_SELECT}`;
 // Joined alongside author on every post select — null on the vast
@@ -40,6 +47,10 @@ const TAGGED_PROJECT_SELECT = `tagged_project:projects!posts_tagged_project_id_f
 // not a further-nested reshared_post, so repost-of-a-repost links to the
 // immediate parent rather than recursing indefinitely.
 export const FEED_SELECT = `*, author:profiles!posts_author_id_fkey(${AUTHOR_SELECT}), ${PAGE_SELECT}, ${TAGGED_PROJECT_SELECT}, reshared_post(*, author:profiles!posts_author_id_fkey(${AUTHOR_SELECT}))`;
+
+export function canEditPost(post: Pick<PostWithAuthor, "created_at">): boolean {
+  return Date.now() - new Date(post.created_at).getTime() <= POST_EDIT_WINDOW_MS;
+}
 
 function normalizeAuthor(raw: any) {
   return raw ? { ...raw, roles: toProfileRoles(raw.profile_roles) } : raw;
@@ -256,5 +267,160 @@ export function usePostById(postId: string | null) {
       return normalizePost(data);
     },
     enabled: !!postId,
+  });
+}
+
+/** Whether the current user has already reshared/quoted the given post — used
+ * to hide the Reshare button (you can only reshare a given post once). */
+export function useHasReshared(postId: string, enabled: boolean = true) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["has-reshared", postId, user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      const { data } = await supabase
+        .from("posts")
+        .select("id")
+        .eq("author_id", user.id)
+        .eq("reshared_post_id", postId)
+        .eq("is_deleted", false)
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!user && enabled,
+  });
+}
+
+/** Total distinct viewers of a post, from the same post_views rows
+ * useMarkPostSeen writes to (one row per user, author's own views excluded
+ * at write-time). Only fetched when `enabled` — call sites pass their
+ * showStats flag so feed cards, which never show this, skip the query. */
+export function usePostViewCount(postId: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["post-view-count", postId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("post_views")
+        .select("*", { count: "exact", head: true })
+        .eq("post_id", postId);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!postId && enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Today's prioritized post for a creator, if any — drives the
+ * Prioritize button's state on PostCard (whether this exact post
+ * is today's pick, a different post is, or nothing's been chosen
+ * yet). See feed_algorithm_migration.sql for prioritized_posts.
+ */
+export function usePrioritizedPostToday(creatorId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["prioritized-post-today", creatorId],
+    queryFn: async (): Promise<string | null> => {
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, matches the edge function
+      const { data, error } = await supabase
+        .from("prioritized_posts")
+        .select("post_id")
+        .eq("creator_id", creatorId)
+        .eq("prioritized_date", today)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.post_id ?? null;
+    },
+    enabled,
+  });
+}
+
+export function usePrioritizePost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      const { data, error } = await supabase.functions.invoke("prioritize-post", {
+        body: { post_id: postId },
+      });
+      if (error) {
+        // Same FunctionsHttpError unwrapping as useReshare — the friendly
+        // "already prioritized today" message lives in the function's
+        // response body, not the generic error supabase-js surfaces.
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const body = await error.context.json();
+            throw new Error(typeof body?.error === "string" ? body.error : error.message);
+          } catch (parseError) {
+            if (parseError instanceof Error && parseError.message !== error.message) throw parseError;
+            throw error;
+          }
+        }
+        throw error;
+      }
+      if (data?.error) throw new Error(data.error);
+      return data.prioritized as { post_id: string; creator_id: string; prioritized_date: string };
+    },
+    onSuccess: (prioritized) => {
+      queryClient.invalidateQueries({ queryKey: ["prioritized-post-today", prioritized.creator_id] });
+      queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
+    },
+  });
+}
+
+export function useDeletePost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: { blocking: true },
+    mutationFn: async (postId: string) => {
+      const { error } = await supabase
+        .from("posts")
+        .update({ is_deleted: true })
+        .eq("id", postId);
+      if (error) throw error;
+    },
+    // Awaited (not fire-and-forget) so LoadingOverlay — which is
+    // driven off this mutation's pending state, see meta.blocking —
+    // stays up until these refetches actually land, not just until
+    // they're requested. invalidateQueries' returned promise resolves
+    // once the matching active queries finish refetching, so without
+    // this await the overlay could close while the deleted post is
+    // still sitting in the list for another moment, reading as
+    // "nothing happened" until the background refetch catches up.
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["feed-posts"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-posts"] }),
+        queryClient.invalidateQueries({ queryKey: ["page-posts"] }),
+      ]);
+    },
+  });
+}
+
+export function useSetPostArchived() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    // Same reasoning as useDeletePost's onSuccess above — archiving/
+    // restoring a post needs the same "stay blocking until the item
+    // has actually left (or rejoined) the list" treatment, which it
+    // was missing entirely before (no meta.blocking at all).
+    meta: { blocking: true },
+    mutationFn: async ({ postId, archived }: { postId: string; archived: boolean }) => {
+      const { error } = await supabase
+        .from("posts")
+        .update({ is_archived: archived })
+        .eq("id", postId);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["feed-posts"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-posts"] }),
+        queryClient.invalidateQueries({ queryKey: ["page-posts"] }),
+      ]);
+    },
   });
 }
