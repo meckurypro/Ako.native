@@ -7,8 +7,21 @@
 import { Text, type TextStyle } from "react-native";
 import type { ProfileRole } from "../types/database";
 
-export function RoleTags({ roles, style }: { roles: ProfileRole[]; style?: TextStyle }) {
+// `numberOfLines` covers web's `truncate` (PostCard passes 1).
+export function RoleTags({
+  roles,
+  style,
+  numberOfLines,
+}: {
+  roles: ProfileRole[];
+  style?: TextStyle;
+  numberOfLines?: number;
+}) {
   if (!roles || roles.length === 0) return null;
   const sorted = [...roles].sort((a, b) => a.position - b.position);
-  return <Text style={style}>{sorted.map((r) => r.label).join(" · ")}</Text>;
+  return (
+    <Text style={style} numberOfLines={numberOfLines}>
+      {sorted.map((r) => r.label).join(" · ")}
+    </Text>
+  );
 }
