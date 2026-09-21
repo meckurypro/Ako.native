@@ -5,7 +5,7 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
-import { Avatar, Text } from "@/components/core";
+import { Avatar, Text, VerifiedBadge } from "@/components/core";
 import { ErrorState, Skeleton } from "@/components/feedback";
 import { PostCard } from "@/components/feed/PostCard";
 import { type Person, type ProfileMedia, useFollowState, useIdentityPosts, useProfile, useProfileMedia, useToggleFollow } from "@/features/discovery/api";
@@ -65,7 +65,8 @@ function ProfileHeader({ person, own, locked, showMediaTab, tab, setTab, followL
     <View style={s.identity}>
       <Avatar uri={person.avatar_url} name={person.display_name} size={64} />
       <View style={s.identityCopy}>
-        <View style={s.nameRow}><Text style={s.name}>{person.display_name}</Text>{person.is_verified ? <MaterialCommunityIcons name="check-decagram" size={18} color={colors.accent} /> : null}</View>
+        <Text style={s.name}>{person.display_name}</Text>
+        {person.is_verified ? <View style={{ marginTop: 4 }}><VerifiedBadge size={15} label /></View> : null}
         {person.roles?.length ? <Text numberOfLines={2} color="secondary" style={s.roles}>{person.roles.map((role) => role.label).join(" · ")}</Text> : null}
         <View style={s.handleRow}><Text color="secondary" style={s.handle}>@{person.username}</Text>{domain ? <><Text color="secondary" style={s.handle}> / </Text><Pressable onPress={() => void Linking.openURL(/^https?:\/\//i.test(person.website_url!) ? person.website_url! : `https://${person.website_url}`)}><Text color="accent" style={s.handle}>◎ {domain}</Text></Pressable></> : null}</View>
       </View>

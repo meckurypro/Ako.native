@@ -2,6 +2,7 @@
 import { useCallback, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { Stack } from "expo-router";
+import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
@@ -12,6 +13,7 @@ import { AccountAccessError } from "@/components/account/AccountAccessError";
 import { AccountUnderReview } from "@/components/account/AccountUnderReview";
 import { AppSplash } from "@/components/feedback/AppSplash";
 import { useAccountAccess } from "@/features/account/api";
+import { fontAssets } from "@/theme/fonts";
 
 void SplashScreen.preventAutoHideAsync();
 configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
@@ -25,4 +27,14 @@ function AppNavigator() {
   return <View onLayout={onLayout} style={{ flex: 1, backgroundColor: colors.background }}><StatusBar style={isDark ? "light" : "dark"} />{gate ?? <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: "fade_from_bottom" }}><Stack.Screen name="(auth)" /><Stack.Screen name="(onboarding)" /><Stack.Screen name="(tabs)" /><Stack.Screen name="auth/callback" /><Stack.Screen name="auth/reset-password" /><Stack.Screen name="profile/edit" /><Stack.Screen name="modals/create" options={{ presentation: "transparentModal", animation: "fade", contentStyle: { backgroundColor: "transparent" } }} /><Stack.Screen name="modals/logout-confirm" options={{ presentation: "transparentModal", animation: "fade" }} /></Stack>}{showSplash && <AppSplash ready={isReady && !accessPending} onFinished={() => setShowSplash(false)} />}</View>;
 }
 
-export default function RootLayout() { return <AppProviders><AppNavigator /></AppProviders>; }
+export default function RootLayout() {
+  // Keep the native splash screen up (preventAutoHideAsync above) until
+  // Playfair Display/Inter/Roboto are actually loaded — otherwise the
+  // very first frame renders in the OS default font and every screen
+  // visibly re-flows/re-paints text a beat later. AppNavigator's own
+  // onLayout call (which hides the splash) never fires until this
+  // returns non-null, so there's no risk of hiding it early.
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
+  if (!fontsLoaded && !fontError) return null;
+  return <AppProviders><AppNavigator /></AppProviders>;
+}
