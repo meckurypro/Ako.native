@@ -1,3 +1,4 @@
+// File: app/activity/[kind].tsx
 import { useState } from "react";
 import { ActivityIndicator, Platform, FlatList, Pressable, Share, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/core/Icon";
@@ -134,7 +135,7 @@ function HistoryRow({ item }: { item: any }) {
   const subtitle = isPost ? `Post by ${value.author?.display_name ?? "someone"}` : "Project";
   const thumbnail = isPost ? null : value.thumbnail_url;
   const date = new Date(item.viewedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const open = () => isPost ? router.push({ pathname: "/posts/[postId]", params: { postId: value.id } }) : undefined;
+  const open = () => isPost ? router.push({ pathname: "/posts/[postId]", params: { postId: value.id } }) : router.push({ pathname: "/projects/[projectId]", params: { projectId: value.id } });
   return <Pressable onPress={open} style={[s.historyRow, { borderBottomColor: colors.border }]}><View style={[s.historyThumb, { backgroundColor: colors.surface }]}>{thumbnail ? <Image source={{ uri: thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name={isPost ? "file-text" : "image"} size={16} color={colors.textMuted} />}</View><View style={s.historyCopy}><Text numberOfLines={1} style={s.historyTitle}>{title}</Text><Text color="muted" style={s.historySubtitle}>{subtitle}</Text></View><Text color="muted" style={s.historyDate}>{date}</Text></Pressable>;
 }
 
@@ -149,11 +150,11 @@ function EventSection({ title, rows }: { title: string; rows: any[] }) {
 }
 
 function EventRow({ item }: { item: any }) {
-  const { colors } = useTheme();
+  const router = useRouter(); const { colors } = useTheme();
   const label = item.kind ?? "Event";
   const when = item.when ? new Date(item.when).toLocaleString() : "Date TBA";
   const title = item.title ?? "Project";
-  return <Pressable style={[s.eventRow, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[s.eventThumb, { backgroundColor: colors.background }]}>{item.thumbnail_url ? <Image source={{ uri: item.thumbnail_url }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name="image" size={18} color={colors.textMuted} />}</View><View style={s.eventCopy}><Text numberOfLines={1} style={s.eventTitle}>{title}</Text><Text color="muted" numberOfLines={1} style={s.eventMeta}>{label} · {when}</Text></View></Pressable>;
+  return <Pressable accessibilityRole="button" onPress={() => item.id && router.push({ pathname: "/projects/[projectId]", params: { projectId: item.id } })} style={[s.eventRow, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[s.eventThumb, { backgroundColor: colors.background }]}>{item.thumbnail_url ? <Image source={{ uri: item.thumbnail_url }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name="image" size={18} color={colors.textMuted} />}</View><View style={s.eventCopy}><Text numberOfLines={1} style={s.eventTitle}>{title}</Text><Text color="muted" numberOfLines={1} style={s.eventMeta}>{label} · {when}</Text></View></Pressable>;
 }
 
 function EventsEmpty() {
@@ -198,8 +199,8 @@ function AffiliateEmpty() {
 }
 
 function ProjectRow({ item, kind }: { item: any; kind: string }) {
-  const { colors } = useTheme();
-  return <View style={[s.project, { backgroundColor: colors.surface, borderColor: colors.border }]}><Icon name={kind === "events" ? "calendar-clock" : "image"} size={22} color={colors.accent} /><View style={{ flex: 1 }}><Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "600" }}>{item.title ?? "Project"}</Text><Text color="secondary" numberOfLines={1} style={{ fontSize: 12 }}>{item.when ? new Date(item.when).toLocaleString() : item.description ?? "Project"}</Text></View></View>;
+  const router = useRouter(); const { colors } = useTheme();
+  return <Pressable accessibilityRole="button" onPress={() => item.id && router.push({ pathname: "/projects/[projectId]", params: { projectId: item.id } })} style={[s.project, { backgroundColor: colors.surface, borderColor: colors.border }]}><Icon name={kind === "events" ? "calendar-clock" : "image"} size={22} color={colors.accent} /><View style={{ flex: 1 }}><Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "600" }}>{item.title ?? "Project"}</Text><Text color="secondary" numberOfLines={1} style={{ fontSize: 12 }}>{item.when ? new Date(item.when).toLocaleString() : item.description ?? "Project"}</Text></View></Pressable>;
 }
 
 function FeedIcon({ color }: { color: string }) {

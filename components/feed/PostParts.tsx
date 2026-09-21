@@ -10,7 +10,7 @@
 //   - ArchivedCornerBar      — Restore / Delete on frozen (archived / dead
 //                              reshare) cards, whose tray is disabled
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Linking, Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { Icon } from "@/components/core/Icon";
 import { useRouter } from "expo-router";
@@ -139,11 +139,11 @@ export function RepostBadgeButton({ source }: { source: Post["reshared_post"] | 
 // ─── Tagged project ────────────────────────────────────────────────────────
 // A small square thumbnail and the title on a soft glass layer of the card's
 // own surface — deliberately the quietest embed (a mention, not a
-// post-within-a-post). Price is never shown here. Native has no project detail
-// screen yet, so a tap opens the project on the web app.
-const WEB_ORIGIN = "https://ako.app";
+// post-within-a-post). Price is never shown here. A tap opens the native
+// project detail screen (app/projects/[projectId].tsx).
 
 export function TaggedProjectEmbed({ project }: { project: TaggedProjectSummary | null | undefined }) {
+  const router = useRouter();
   const { colors, isDark } = useTheme();
   if (!project) return null;
 
@@ -157,12 +157,11 @@ export function TaggedProjectEmbed({ project }: { project: TaggedProjectSummary 
     );
   }
 
-  const url = project.slug ? `${WEB_ORIGIN}/${project.slug}` : `${WEB_ORIGIN}/projects/${project.id}`;
   return (
     <PressableScale
       accessibilityRole="link"
       accessibilityLabel={project.title}
-      onPress={() => void Linking.openURL(url)}
+      onPress={() => router.push({ pathname: "/projects/[projectId]", params: { projectId: project.id } })}
       style={[
         s.embed,
         s.projectCard,
