@@ -13,6 +13,7 @@ import { type Person, type ProfileMedia, useFollowState, useIdentityPosts, usePr
 import type { Post } from "@/features/feed/types";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useProbationalLock } from "@/features/account/probational";
 
 type Tab = "posts" | "media";
 // Toolbar (Message/Follow/⋯) is its own absolute overlay above the list, not
@@ -108,11 +109,18 @@ function ProfileToolbar({ person, own, following, followLabel, followPending, on
   const [relationshipOpen, setRelationshipOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const profileUrl = `https://ako.app/profile/${person.username}`;
+  const showMore = () => setShareOpen(true);
+  // Probational users don't get the social layer — see
+  // features/account/probational.ts. Hides Follow/Message entirely
+  // rather than disabling them.
+  const followLocked = useProbationalLock("probational_follow_enabled");
+  const messageLocked = useProbationalLock("probational_message_enabled");
+
   return <>
     <Animated.View style={[s.toolbar, { backgroundColor: colors.background }, style]}>
-      {own || following ? <View style={{ flex: 1 }} /> : <Pressable onPress={() => router.push("/(tabs)/inbox")} style={[s.messageButton, { borderColor: colors.border }]}><Icon name="message-square" size={16} color={colors.textSecondary} /><Text color="secondary" style={s.actionText}>Message</Text></Pressable>}
-      {own ? <Pressable onPress={() => router.push("/profile/edit")} style={[s.messageButton, { borderColor: colors.border }]}><Text color="secondary" style={s.actionText}>Edit profile</Text></Pressable> : <Pressable disabled={followPending} onPress={() => following ? setRelationshipOpen(true) : onFollow()} style={[s.followButton, { backgroundColor: following ? colors.accentSoft : colors.surfaceElevated, opacity: followPending ? .55 : 1 }]}>{followPending ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={s.followContent}>{following ? <Icon name="user-check" size={14} color={colors.accent} /> : null}<Text style={[s.actionText, { color: following ? colors.accent : colors.text }]}>{followLabel}</Text>{following ? <Icon name="chevron-down" size={14} color={colors.accent} /> : null}</View>}</Pressable>}
-      <Pressable accessibilityLabel="More options" onPress={() => setShareOpen(true)} style={s.more}><Icon name="more-horizontal" size={18} color={colors.textSecondary} /></Pressable>
+      {own || following || messageLocked ? <View style={{ flex: 1 }} /> : <Pressable onPress={() => router.push("/(tabs)/inbox")} style={[s.messageButton, { borderColor: colors.border }]}><Icon name="message-square" size={16} color={colors.textSecondary} /><Text color="secondary" style={s.actionText}>Message</Text></Pressable>}
+      {own ? <Pressable onPress={() => router.push("/profile/edit")} style={[s.messageButton, { borderColor: colors.border }]}><Text color="secondary" style={s.actionText}>Edit profile</Text></Pressable> : followLocked ? null : <Pressable disabled={followPending} onPress={() => following ? setRelationshipOpen(true) : onFollow()} style={[s.followButton, { backgroundColor: following ? colors.accentSoft : colors.surfaceElevated, opacity: followPending ? .55 : 1 }]}>{followPending ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={s.followContent}>{following ? <Icon name="user-check" size={14} color={colors.accent} /> : null}<Text style={[s.actionText, { color: following ? colors.accent : colors.text }]}>{followLabel}</Text>{following ? <Icon name="chevron-down" size={14} color={colors.accent} /> : null}</View>}</Pressable>}
+      <Pressable accessibilityLabel="More options" onPress={showMore} style={s.more}><Icon name="more-horizontal" size={18} color={colors.textSecondary} /></Pressable>
     </Animated.View>
     <RelationshipMenu visible={relationshipOpen} person={person} onClose={() => setRelationshipOpen(false)} onMessage={() => { setRelationshipOpen(false); router.push("/(tabs)/inbox"); }} onUnfollow={() => { setRelationshipOpen(false); onFollow(); }} />
     <ShareProfileSheet visible={shareOpen} person={person} url={profileUrl} onClose={() => setShareOpen(false)} />

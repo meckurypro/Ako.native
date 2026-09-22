@@ -19,6 +19,7 @@ import { useCategories } from "@/features/onboarding/api";
 import { useActiveIdentity, useCreatePost, useUploadPostMedia } from "@/features/compose/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
+import { ProbationalLock } from "@/components/account/ProbationalLock";
 
 const CONTENT_LIMIT = 450;
 const HEADING_LIMIT = 50;
@@ -33,6 +34,10 @@ const FORMAT_ACTIONS = [
 ] as const;
 
 export default function Compose() {
+  return <ProbationalLock featureKey="probational_post_enabled"><ComposeScreen /></ProbationalLock>;
+}
+
+function ComposeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
   const { colors } = useTheme();
