@@ -12,7 +12,8 @@
 //     font="simple" inside a Roboto run (the post heading).
 //   - The hashtag pattern stays unicode-aware (\p{L}), as it already was in
 //     PostText, so #Ọjọ links whole; web's is ASCII-only.
-//   - Hashtags open discover search (`q`); there is no dedicated hashtag screen.
+//   - Hashtags open the unified Discover tab pre-filled with `q` and the Posts
+//     tab selected; there is no dedicated hashtag screen.
 //   - @mentions resolve profile-vs-page the way web's MentionLink does
 //     (useAccountKind), starting at the profile route and correcting itself.
 //   - A nested <Text onPress> takes the touch itself, so tapping a link inside
@@ -55,7 +56,7 @@ export function FormattedText({ value, font = "body" }: { value: string; font?: 
           return (
             <RNText
               key={key}
-              onPress={() => router.push({ pathname: "/discover/search", params: { q: part.slice(1) } })}
+              onPress={() => router.push({ pathname: "/(tabs)/discover", params: { q: part.slice(1) } })}
               style={{ color: colors.accent }}
             >
               {part}

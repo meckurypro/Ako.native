@@ -39,6 +39,15 @@ export function ProjectRail({ title, projects }: { title: string; projects: Mini
   );
 }
 
+// Wrapping grid of mini cards — a full tab's worth (the Page profile's
+// Projects tab), as opposed to the horizontal-scroll ProjectRail above.
+// Mirrors web's ProjectMiniGrid; cards keep their own fixed width and simply
+// wrap, so this needs no column-count math.
+export function ProjectMiniGrid({ projects, showStatus = false }: { projects: MiniProject[]; showStatus?: boolean }) {
+  if (!projects.length) return null;
+  return <View style={s.rail}>{projects.map(project => <ProjectMiniCard key={project.id} project={project} showStatus={showStatus} />)}</View>;
+}
+
 const s = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
   thumb: { width: "100%", aspectRatio: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },

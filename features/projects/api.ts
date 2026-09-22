@@ -164,7 +164,7 @@ export function useCreateProject() {
       }
       return data;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["user-projects"] }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["user-projects"] }); void queryClient.invalidateQueries({ queryKey: ["page-projects"] }); },
   });
 }
 
@@ -191,6 +191,24 @@ export type ProjectWithOwner = Project & { owner: ProjectOwner; posted_as_page: 
 export const getEffectivePrice = (project: Pick<Project, "price_usd" | "promo_price_usd">) => project.promo_price_usd ?? project.price_usd;
 export const isProjectFree = (project: Pick<Project, "price_usd" | "promo_price_usd">) => getEffectivePrice(project) <= 0;
 export const hasActivePromo = (project: Pick<Project, "price_usd" | "promo_price_usd">) => project.promo_price_usd !== null && project.promo_price_usd !== undefined;
+
+// Projects attributed to a Page (posted_as_page_id) — the Projects tab on
+// /pages/[username]. Goes through get_page_projects (see web's
+// supabase/ako_page_projects_listing.sql) because RLS alone can't express
+// "public to everyone, plus the creator's own drafts, plus the team's own
+// private work". Viewer-dependent, so the viewer id is part of the cache key.
+export function usePageProjects(pageId: string | undefined) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["page-projects", pageId, user?.id],
+    enabled: !!pageId,
+    queryFn: async (): Promise<Project[]> => {
+      const { data, error } = await supabase.rpc("get_page_projects", { p_page_id: pageId });
+      if (error) throw error;
+      return (data ?? []) as Project[];
+    },
+  });
+}
 
 // Resolves the readable message from an edge function failure (mirrors web's resolveFunctionErrorMessage).
 export async function projectFunctionError(error: unknown, fallback: string) {
