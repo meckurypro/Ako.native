@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { Icon } from "@/components/core/Icon";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Avatar, Text, VerifiedBadge } from "@/components/core";
 import { ErrorState } from "@/components/feedback";
@@ -34,7 +34,11 @@ function ProjectGrid({ projects }: { projects: Project[] }) { if (!projects.leng
 
 export default function DiscoverScreen() {
   const { colors, isDark } = useTheme(); const router = useRouter(); const { profile } = useAuth(); const identity = useActiveIdentity();
+  const { q } = useLocalSearchParams<{ q?: string }>();
   const [query, setQuery] = useState(""); const [tab, setTab] = useState<SearchTab>("all"); const [openCategory, setOpenCategory] = useState<string | null>(null);
+  // Arriving from a #hashtag tap (FormattedText): land straight in Posts for that tag.
+  // Re-runs on every `q` change so tapping another hashtag while already here still jumps.
+  useEffect(() => { if (typeof q === "string" && q.length > 0) { setQuery(q); setTab("posts"); } }, [q]);
   const pageId = identity.data?.mode === "page" ? identity.data.page.id : undefined; const personalSuggestions = useSuggestedPeople(); const pageSuggestions = usePageSuggestedPeople(pageId); const suggestions = pageId ? pageSuggestions : personalSuggestions;
   const suggestedPages = useSuggestedPages();
   const people = useSearchPeople(query); const pages = useSearchPages(query); const posts = useSearchPosts(query); const projects = useSearchProjects(query); const categories = useCategories(); const personalNotifications = usePersonalNotifications(!pageId); const pageNotifications = usePageNotifications(pageId, !!pageId);
