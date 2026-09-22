@@ -48,16 +48,25 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       "expo-splash-screen",
       {
-        // Light: the light-theme wordmark (dark green) on the light canvas; dark: the dark-theme wordmark (bright green)
-        // on the dark canvas — the same pairing the in-app headers use (theme/wordmarks.ts). Backgrounds are the
-        // theme's `background` tokens so the hand-off to AppSplash doesn't flash.
-        image: "./assets/images/app-icon-light-without-tagline.png",
-        imageWidth: 152,
+        // The native splash is background-only now: it renders before JS,
+        // so it can only ever follow the *system* color scheme, never an
+        // in-app "force dark/light" preference — see AppSplash's own
+        // known-limitations note. Putting the brand mark here risked a
+        // wrong-theme logo flash on exactly that mismatch, so all logo,
+        // glow and motif rendering now lives entirely in AppSplash, which
+        // waits for ThemeProvider to hydrate before it ever paints.
+        // `image` is a fully transparent 200x200 placeholder (see
+        // scripts/build-splash-assets.py) purely so Android 12+'s circular
+        // splash-icon mask has nothing to crop; if a future SDK bump makes
+        // the plugin reject a transparent image, omit `image` here entirely
+        // rather than putting a real logo back.
+        image: "./assets/images/splash-blank.png",
+        imageWidth: 200,
         resizeMode: "contain",
-        backgroundColor: "#F7F4EF",
+        backgroundColor: "#F7F4EF", // lightColors.background (theme/tokens.ts)
         dark: {
-          image: "./assets/images/app-icon-dark-without-tagline.png",
-          backgroundColor: "#0C0C0B",
+          image: "./assets/images/splash-blank.png",
+          backgroundColor: "#0C0C0B", // darkColors.background (theme/tokens.ts)
         },
       },
     ],
