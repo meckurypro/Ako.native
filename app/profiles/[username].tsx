@@ -1,18 +1,29 @@
 import { useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from "react-native";
 import { Icon, type IconName } from "@/components/core/Icon";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import Animated, { interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
 import { Avatar, FacebookGlyph, Text, VerifiedBadge, WhatsAppGlyph, XGlyph } from "@/components/core";
 import { ErrorState, Skeleton } from "@/components/feedback";
 import { PostCard } from "@/components/feed/PostCard";
 import { type Person, type ProfileMedia, useFollowState, useIdentityPosts, useProfile, useProfileMedia, useToggleFollow } from "@/features/discovery/api";
+import type { Post } from "@/features/feed/types";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 
 type Tab = "posts" | "media";
+// Toolbar (Message/Follow/⋯) is its own absolute overlay above the list, not
+// a list row — it fades away once the identity block has scrolled past (see
+// toolbarStyle below), the same collapse behavior as the owner's own profile
+// screen (app/(tabs)/profile.tsx) and web's ProfilePage (6d70fcd). The tab
+// bar is a real row (index 1) kept pinned the whole time via
+// stickyHeaderIndices, so once the toolbar is gone it's the only thing left
+// docked at the top — again matching both of those.
+const TOOLBAR_HEIGHT = 64;
+type Row = { type: "identity" } | { type: "tabs" } | { type: "status"; mode: "loading" | "empty-posts" | "empty-media" | "private" } | { type: "post"; id: string; post: Post } | { type: "media"; id: string; item: ProfileMedia };
 
 export default function PublicProfileScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
@@ -29,6 +40,15 @@ export default function PublicProfileScreen() {
   const posts = useIdentityPosts(locked ? "" : person?.id ?? "", "profile");
   const media = useProfileMedia(person?.id ?? "", !locked);
 
+  const headerHeight = useSharedValue(220);
+  const scrollY = useSharedValue(0);
+  const toolbarStyle = useAnimatedStyle(() => {
+    const start = headerHeight.value;
+    const opacity = interpolate(scrollY.value, [start, start + 40], [1, 0], "clamp");
+    return { opacity, transform: [{ translateY: interpolate(scrollY.value, [start, start + 40], [0, -TOOLBAR_HEIGHT], "clamp") }] };
+  });
+  const onScroll = useAnimatedScrollHandler({ onScroll: (event) => { scrollY.value = Math.max(0, event.contentOffset.y); } });
+
   if (profile.isLoading) return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><View style={s.loading}><Skeleton height={220} /><Skeleton height={360} /></View></SafeAreaView>;
   if (profile.isError || !person) return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><ErrorState message="Profile unavailable." onRetry={() => void profile.refetch()} /></SafeAreaView>;
 
@@ -36,32 +56,72 @@ export default function PublicProfileScreen() {
   const postRows = posts.data?.pages.flat() ?? [];
   const follow = () => void toggle.mutateAsync(state.data ?? { following: false, requested: false }).catch(() => Alert.alert("Couldn't update follow state"));
   const showMediaTab = (media.data?.length ?? 0) > 0;
-  const header = <ProfileHeader person={person} own={own} locked={locked} showMediaTab={showMediaTab} tab={showMediaTab ? tab : "posts"} setTab={setTab} followLabel={label} following={!!state.data?.following || !!state.data?.requested} followPending={state.isLoading || toggle.isPending} onFollow={follow} />;
+  const tabs: Tab[] = ["posts", ...(showMediaTab ? (["media"] as const) : [])];
+  const tabIndex = tabs.indexOf(tab);
+
+  // Content rows below the (always-present) identity + tabs rows: the
+  // private notice, a loading spinner, an empty message, or the tab's
+  // actual items — as rows, not ListEmptyComponent, since `data` here also
+  // holds the identity/tabs rows and so is never literally empty.
+  const contentLoading = tab === "posts" ? posts.isLoading : media.isLoading;
+  const contentRows: Row[] = locked
+    ? [{ type: "status", mode: "private" }]
+    : contentLoading
+      ? [{ type: "status", mode: "loading" }]
+      : tab === "posts"
+        ? postRows.length ? postRows.map((post) => ({ type: "post" as const, id: post.id, post })) : [{ type: "status" as const, mode: "empty-posts" }]
+        : (media.data ?? []).length ? (media.data ?? []).map((item) => ({ type: "media" as const, id: item.id, item })) : [{ type: "status" as const, mode: "empty-media" }];
+  const rows: Row[] = [{ type: "identity" }, ...(locked ? [] : [{ type: "tabs" as const }]), ...contentRows];
 
   return <SafeAreaView edges={["top", "left", "right"]} style={[s.root, { backgroundColor: colors.background }]}>
-    {tab === "posts" ? <FlatList data={locked ? [] : postRows} renderItem={({ item }) => <View style={s.postWrap}><PostCard post={item} /></View>} keyExtractor={(item) => item.id} ListHeaderComponent={header} contentContainerStyle={s.list} ItemSeparatorComponent={() => <View style={{ height: 14 }} />} onEndReached={() => { if (posts.hasNextPage && !posts.isFetchingNextPage) void posts.fetchNextPage(); }} onEndReachedThreshold={.5} refreshing={posts.isRefetching} onRefresh={() => { void profile.refetch(); if (!locked) void posts.refetch(); }} ListEmptyComponent={locked ? <PrivateState /> : posts.isLoading ? <ActivityIndicator color={colors.accent} style={s.indicator} /> : <Empty label="No posts yet." />} ListFooterComponent={posts.isFetchingNextPage ? <ActivityIndicator color={colors.accent} style={s.indicator} /> : <View style={{ height: 18 }} />} /> : <FlatList data={locked ? [] : media.data ?? []} renderItem={({ item }) => <MediaCard item={item} />} keyExtractor={(item) => item.id} ListHeaderComponent={header} contentContainerStyle={s.list} ItemSeparatorComponent={() => <View style={{ height: 14 }} />} refreshing={media.isRefetching} onRefresh={() => { void profile.refetch(); if (!locked) void media.refetch(); }} ListEmptyComponent={locked ? <PrivateState /> : media.isLoading ? <ActivityIndicator color={colors.accent} style={s.indicator} /> : <Empty label="No media yet." />} />}
+    <Animated.FlatList
+      data={rows}
+      keyExtractor={(item) => item.type === "identity" ? "identity" : item.type === "tabs" ? "tabs" : item.type === "status" ? `status-${item.mode}` : `${item.type}-${item.id}`}
+      renderItem={({ item }) => item.type === "identity"
+        ? <Identity person={person} onLayout={(height) => { headerHeight.value = height; }} />
+        : item.type === "tabs"
+          ? <Tabs tabs={tabs} tab={tab} index={tabIndex} onChange={setTab} />
+          : item.type === "post"
+            ? <View style={s.postWrap}><PostCard post={item.post} /></View>
+            : item.type === "media"
+              ? <MediaCard item={item.item} />
+              : item.mode === "private" ? <PrivateState /> : item.mode === "loading" ? <ActivityIndicator color={colors.accent} style={s.indicator} /> : <Empty label={item.mode === "empty-posts" ? "No posts yet." : "No media yet."} />}
+      stickyHeaderIndices={locked ? undefined : [1]}
+      contentContainerStyle={[s.list, { paddingTop: TOOLBAR_HEIGHT }]}
+      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      onEndReached={() => { if (tab === "posts" && !locked && posts.hasNextPage && !posts.isFetchingNextPage) void posts.fetchNextPage(); }}
+      onEndReachedThreshold={.5}
+      refreshing={tab === "posts" ? posts.isRefetching : media.isRefetching}
+      onRefresh={() => { void profile.refetch(); if (!locked) { if (tab === "posts") void posts.refetch(); else void media.refetch(); } }}
+      ListFooterComponent={tab === "posts" && posts.isFetchingNextPage ? <ActivityIndicator color={colors.accent} style={s.indicator} /> : <View style={{ height: 18 }} />}
+    />
+    <ProfileToolbar person={person} own={own} following={!!state.data?.following} followLabel={label} followPending={state.isLoading || toggle.isPending} onFollow={follow} style={toolbarStyle} />
     <BottomNavigation />
   </SafeAreaView>;
 }
 
-function ProfileHeader({ person, own, locked, showMediaTab, tab, setTab, followLabel, following, followPending, onFollow }: { person: Person; own: boolean; locked: boolean; showMediaTab: boolean; tab: Tab; setTab: (tab: Tab) => void; followLabel: string; following: boolean; followPending: boolean; onFollow: () => void }) {
+function ProfileToolbar({ person, own, following, followLabel, followPending, onFollow, style }: { person: Person; own: boolean; following: boolean; followLabel: string; followPending: boolean; onFollow: () => void; style: object }) {
   const router = useRouter();
   const { colors } = useTheme();
   const [relationshipOpen, setRelationshipOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const domain = person.website_url?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0];
   const profileUrl = `https://ako.app/profile/${person.username}`;
-  const showMore = () => setShareOpen(true);
-
   return <>
-    <View style={s.toolbar}>
+    <Animated.View style={[s.toolbar, { backgroundColor: colors.background }, style]}>
       {own || following ? <View style={{ flex: 1 }} /> : <Pressable onPress={() => router.push("/(tabs)/inbox")} style={[s.messageButton, { borderColor: colors.border }]}><Icon name="message-square" size={16} color={colors.textSecondary} /><Text color="secondary" style={s.actionText}>Message</Text></Pressable>}
       {own ? <Pressable onPress={() => router.push("/profile/edit")} style={[s.messageButton, { borderColor: colors.border }]}><Text color="secondary" style={s.actionText}>Edit profile</Text></Pressable> : <Pressable disabled={followPending} onPress={() => following ? setRelationshipOpen(true) : onFollow()} style={[s.followButton, { backgroundColor: following ? colors.accentSoft : colors.surfaceElevated, opacity: followPending ? .55 : 1 }]}>{followPending ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={s.followContent}>{following ? <Icon name="user-check" size={14} color={colors.accent} /> : null}<Text style={[s.actionText, { color: following ? colors.accent : colors.text }]}>{followLabel}</Text>{following ? <Icon name="chevron-down" size={14} color={colors.accent} /> : null}</View>}</Pressable>}
-      <Pressable accessibilityLabel="More options" onPress={showMore} style={s.more}><Icon name="more-horizontal" size={18} color={colors.textSecondary} /></Pressable>
-    </View>
+      <Pressable accessibilityLabel="More options" onPress={() => setShareOpen(true)} style={s.more}><Icon name="more-horizontal" size={18} color={colors.textSecondary} /></Pressable>
+    </Animated.View>
     <RelationshipMenu visible={relationshipOpen} person={person} onClose={() => setRelationshipOpen(false)} onMessage={() => { setRelationshipOpen(false); router.push("/(tabs)/inbox"); }} onUnfollow={() => { setRelationshipOpen(false); onFollow(); }} />
     <ShareProfileSheet visible={shareOpen} person={person} url={profileUrl} onClose={() => setShareOpen(false)} />
+  </>;
+}
 
+function Identity({ person, onLayout }: { person: Person; onLayout: (height: number) => void }) {
+  const domain = person.website_url?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0];
+  return <View onLayout={(event) => onLayout(event.nativeEvent.layout.height)}>
     <View style={s.identity}>
       <Avatar uri={person.avatar_url} name={person.display_name} size={64} />
       <View style={s.identityCopy}>
@@ -71,14 +131,26 @@ function ProfileHeader({ person, own, locked, showMediaTab, tab, setTab, followL
         <View style={s.handleRow}><Text color="secondary" style={s.handle}>@{person.username}</Text>{domain ? <><Text color="secondary" style={s.handle}> / </Text><Pressable onPress={() => void Linking.openURL(/^https?:\/\//i.test(person.website_url!) ? person.website_url! : `https://${person.website_url}`)}><Text color="accent" style={s.handle}>◎ {domain}</Text></Pressable></> : null}</View>
       </View>
     </View>
-
     {person.bio ? <Text style={s.bio}>{person.bio}</Text> : null}
     <View style={s.stats}>
-      <Pressable onPress={() => router.push({ pathname: "/profiles/[username]/[list]", params: { username: person.username, list: "following" } })}><Text style={s.statNumber}>{person.following_count} <Text color="secondary" style={s.statLabel}>Following</Text></Text></Pressable>
-      <Pressable onPress={() => router.push({ pathname: "/profiles/[username]/[list]", params: { username: person.username, list: "followers" } })}><Text style={s.statNumber}>{person.follower_count} <Text color="secondary" style={s.statLabel}>Followers</Text></Text></Pressable>
+      <ConnectionLink username={person.username} list="following" count={person.following_count} label="Following" />
+      <ConnectionLink username={person.username} list="followers" count={person.follower_count} label="Followers" />
     </View>
-    {!locked ? <View style={[s.tabs, { borderBottomColor: colors.border }]}><Pressable onPress={() => setTab("posts")} style={s.tab}><Text style={[s.tabText, { color: tab === "posts" ? colors.accent : colors.textMuted }]}>Posts</Text>{tab === "posts" ? <View style={[s.tabLine, { backgroundColor: colors.accent }]} /> : null}</Pressable>{showMediaTab ? <Pressable onPress={() => setTab("media")} style={s.tab}><Text style={[s.tabText, { color: tab === "media" ? colors.accent : colors.textMuted }]}>Media</Text>{tab === "media" ? <View style={[s.tabLine, { backgroundColor: colors.accent }]} /> : null}</Pressable> : null}</View> : null}
-  </>;
+  </View>;
+}
+
+function ConnectionLink({ username, list, count, label }: { username: string; list: "following" | "followers"; count: number; label: string }) {
+  const router = useRouter();
+  return <Pressable onPress={() => router.push({ pathname: "/profiles/[username]/[list]", params: { username, list } })}><Text style={s.statNumber}>{count} <Text color="secondary" style={s.statLabel}>{label}</Text></Text></Pressable>;
+}
+
+function Tabs({ tabs, tab, index, onChange }: { tabs: Tab[]; tab: Tab; index: number; onChange: (tab: Tab) => void }) {
+  const { colors } = useTheme();
+  return <View style={[s.tabs, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+    <Pressable onPress={() => onChange("posts")} style={s.tab}><Text style={[s.tabText, { color: tab === "posts" ? colors.accent : colors.textMuted }]}>Posts</Text></Pressable>
+    {tabs.includes("media") ? <Pressable onPress={() => onChange("media")} style={s.tab}><Text style={[s.tabText, { color: tab === "media" ? colors.accent : colors.textMuted }]}>Media</Text></Pressable> : null}
+    <View style={[s.tabLine, { width: `${100 / tabs.length}%`, left: `${(index * 100) / tabs.length}%`, backgroundColor: colors.accent }]} />
+  </View>;
 }
 
 function MediaCard({ item }: { item: ProfileMedia }) {
@@ -157,7 +229,7 @@ const s = StyleSheet.create({
   loading: { padding: 18, gap: 16 },
   list: { paddingBottom: 88 },
   postWrap: { paddingHorizontal: 18 },
-  toolbar: { height: 64, paddingHorizontal: 18, paddingTop: 10, flexDirection: "row", alignItems: "flex-start", justifyContent: "flex-end", gap: 8 },
+  toolbar: { position: "absolute", left: 0, right: 0, top: 0, zIndex: 5, height: TOOLBAR_HEIGHT, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8 },
   messageButton: { height: 42, minWidth: 126, borderRadius: 21, borderWidth: 1, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   followButton: { minWidth: 91, height: 42, paddingHorizontal: 19, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   followContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
@@ -165,19 +237,18 @@ const s = StyleSheet.create({
   more: { width: 30, height: 42, alignItems: "center", justifyContent: "center" },
   identity: { paddingHorizontal: 18, paddingTop: 16, flexDirection: "row", alignItems: "flex-start", gap: 18 },
   identityCopy: { flex: 1, paddingTop: 7 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 7 },
   name: { flexShrink: 1, fontSize: 20, lineHeight: 25, fontWeight: "700" },
   roles: { fontSize: 13, lineHeight: 18, marginTop: 2 },
   handleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 1 },
   handle: { fontSize: 16, lineHeight: 21 },
   bio: { paddingHorizontal: 18, marginTop: 16, fontSize: 15, lineHeight: 21 },
-  stats: { paddingHorizontal: 18, marginTop: 46, marginBottom: 24, flexDirection: "row", gap: 22 },
+  stats: { paddingHorizontal: 18, marginTop: 20, marginBottom: 20, flexDirection: "row", gap: 22 },
   statNumber: { fontSize: 16, lineHeight: 21, fontWeight: "800" },
   statLabel: { fontSize: 16, lineHeight: 21, fontWeight: "400" },
-  tabs: { height: 51, flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 18 },
+  tabs: { height: 51, flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, position: "relative" },
   tab: { flex: 1, alignItems: "center", justifyContent: "center", position: "relative" },
   tabText: { fontSize: 16, lineHeight: 20, fontWeight: "700" },
-  tabLine: { position: "absolute", height: 2, left: 18, right: 18, bottom: -1, borderRadius: 2 },
+  tabLine: { position: "absolute", height: 2, bottom: -1, borderRadius: 2 },
   indicator: { marginVertical: 34 },
   empty: { paddingVertical: 45 },
   private: { paddingHorizontal: 34, paddingVertical: 54, alignItems: "center", gap: 10 },
