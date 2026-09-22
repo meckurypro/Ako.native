@@ -12,6 +12,7 @@ import { type ProjectType, useCreateProject, useGigRoles, useGigSamples, useUplo
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import type { ThemeColors } from "@/theme";
+import { ProbationalLock } from "@/components/account/ProbationalLock";
 
 const LABELS: Record<ProjectType, string> = { file: "File", url: "URL", meeting: "Meeting", media: "Media", gig: "Gig", pitch: "Pitch", book: "Book", event: "Event", room: "Cohort", course: "Course" };
 const HINTS: Record<ProjectType, string> = {
@@ -33,6 +34,10 @@ type MediaKey = "audio" | "video" | "image";
 type MediaChannel = { enabled: boolean; url: string; path: string | null; name: string | null };
 
 export default function NewProject() {
+  return <ProbationalLock featureKey="probational_create_project_enabled"><NewProjectScreen /></ProbationalLock>;
+}
+
+function NewProjectScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { profile } = useAuth();

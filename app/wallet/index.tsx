@@ -6,6 +6,7 @@ import Svg, { Path, Rect } from "react-native-svg";
 import { Text } from "@/components/core";
 import { formatUsd, useFeatureFlag, useWallet, useWalletTransactions, type WalletTransaction } from "@/features/wallet/api";
 import { useTheme } from "@/providers/ThemeProvider";
+import { ProbationalLock } from "@/components/account/ProbationalLock";
 
 const TXN_META: Record<string, { label: string; icon: IconName; positive?: boolean }> = {
   fund: { label: "Wallet funded", icon: "arrow-down-circle", positive: true },
@@ -40,7 +41,7 @@ export default function WalletScreen() {
 
   if (!walletEnabled) return <View style={[s.root, { backgroundColor: colors.background }]}><Header /><Text color="muted" align="center" style={s.disabled}>The wallet is temporarily unavailable. Check back later.</Text><BottomNavigation /></View>;
 
-  return <View style={[s.root, { backgroundColor: colors.background }]}><Header />{wallet.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={transactions.data ?? []} keyExtractor={(item) => item.id} contentContainerStyle={s.list} ListHeaderComponent={<><BalanceCard balance={wallet.data?.balance ?? 0} depositsEnabled={depositsEnabled} withdrawalsEnabled={withdrawalsEnabled} affiliateEnabled={affiliateEnabled} /><Text style={s.recentTitle}>Recent activity</Text></>} ListEmptyComponent={<View style={s.empty}><Text color="muted" align="center" style={s.emptyMain}>No transactions yet.</Text><Text color="muted" align="center" style={s.emptySub}>Everything you fund, spend, and earn will show up here.</Text></View>} renderItem={({ item }) => <TransactionRow transaction={item} />} refreshing={transactions.isRefetching || wallet.isRefetching} onRefresh={() => { void wallet.refetch(); void transactions.refetch(); }} /> }<BottomNavigation /></View>;
+  return <ProbationalLock featureKey="probational_wallet_enabled"><View style={[s.root, { backgroundColor: colors.background }]}><Header />{wallet.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={transactions.data ?? []} keyExtractor={(item) => item.id} contentContainerStyle={s.list} ListHeaderComponent={<><BalanceCard balance={wallet.data?.balance ?? 0} depositsEnabled={depositsEnabled} withdrawalsEnabled={withdrawalsEnabled} affiliateEnabled={affiliateEnabled} /><Text style={s.recentTitle}>Recent activity</Text></>} ListEmptyComponent={<View style={s.empty}><Text color="muted" align="center" style={s.emptyMain}>No transactions yet.</Text><Text color="muted" align="center" style={s.emptySub}>Everything you fund, spend, and earn will show up here.</Text></View>} renderItem={({ item }) => <TransactionRow transaction={item} />} refreshing={transactions.isRefetching || wallet.isRefetching} onRefresh={() => { void wallet.refetch(); void transactions.refetch(); }} /> }<BottomNavigation /></View></ProbationalLock>;
 }
 
 function Header() {

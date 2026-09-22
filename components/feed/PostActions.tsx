@@ -23,6 +23,7 @@ import { useHasReshared, usePrioritizedPostToday, useRecordShare } from "@/featu
 import type { Stance } from "@/features/feed/types";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useProbationalLock } from "@/features/account/probational";
 import { StanceComposer } from "./StanceComposer";
 import { GiftPicker } from "./GiftPicker";
 import { LikeHeart } from "./LikeHeart";
@@ -49,6 +50,11 @@ function ActionSheet({ children, colors, onClose }: { children: React.ReactNode;
 export function PostActions({ postId, recipientId, recipientName, recipientAvatar, likes, dislikes: _dislikes, comments, shares, support, disagree, pushback, onComments, onReshare, hasTaggedProject, disabled, reshareTargetId }: { postId: string; recipientId?: string; recipientName?: string; recipientAvatar?: string | null; likes: number; dislikes: number; comments: number; shares: number; support: number; disagree: number; pushback: number; onComments: () => void; onReshare: () => void; hasTaggedProject?: boolean; disabled?: boolean; reshareTargetId?: string }) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  // Probational users don't get the social layer — see
+  // features/account/probational.ts. Hides Like/Dislike entirely
+  // rather than disabling them; comment COUNT and the ability to open
+  // comments to view them are unaffected.
+  const reactLocked = useProbationalLock("probational_react_enabled");
   const [more, setMore] = useState(false);
   const [stance, setStance] = useState<Stance | null>(null);
   const [gift, setGift] = useState(false);
@@ -107,7 +113,7 @@ export function PostActions({ postId, recipientId, recipientName, recipientAvata
 
   const defaultOrder: SecondaryActionKey[] = ["support", "reshare", "share", "gift", "save", "disagree", "pushback", "dislike"];
   const hiddenForOwner: SecondaryActionKey[] = ["reshare", "gift", "disagree", "pushback", "dislike"];
-  const order = (engagement.data ?? defaultOrder).filter(key => (!isOwner || !hiddenForOwner.includes(key)) && !(key === "gift" && (viewingAsPage || taggedProject)) && !(key === "reshare" && hasReshared.data));
+  const order = (engagement.data ?? defaultOrder).filter(key => (!isOwner || !hiddenForOwner.includes(key)) && !(key === "gift" && (viewingAsPage || taggedProject)) && !(key === "reshare" && hasReshared.data) && !(key === "dislike" && reactLocked));
   const ownerActions: ActionItem[] = isOwner ? [
     { key: "prioritize", icon: "rocket", label: isPrioritizedToday ? "Prioritized today" : "Prioritize", active: isPrioritizedToday, onPress: () => closeAnd(isPrioritizedToday ? () => {} : confirmPrioritize) },
     { key: "promote", icon: "megaphone", label: "Promote", onPress: () => closeAnd(() => comingSoon("Promote")) },

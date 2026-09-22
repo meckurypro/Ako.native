@@ -5,6 +5,7 @@ import Animated, { SlideInDown, useReducedMotion } from "react-native-reanimated
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "@/components/core";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useProbationalLock } from "@/features/account/probational";
 
 const CHOICES = [
   { key: "post", icon: "pen-square", label: "Post", description: "Share a thought with your followers" },
@@ -15,6 +16,13 @@ export default function CreateModal() {
   const router = useRouter();
   const { colors } = useTheme();
   const reduced = useReducedMotion();
+  // Probational users don't get the social layer, and Project
+  // creation is one of their four locked pages — see
+  // features/account/probational.ts. Both entries can disappear at
+  // once; see the empty-state fallback below.
+  const postLocked = useProbationalLock("probational_post_enabled");
+  const createProjectLocked = useProbationalLock("probational_create_project_enabled");
+  const choices = CHOICES.filter((c) => (c.key === "project" ? !createProjectLocked : !postLocked));
 
   const openPostComposer = () => {
     router.replace("/compose");
@@ -45,7 +53,12 @@ export default function CreateModal() {
             </Pressable>
           </View>
           <View style={styles.choices}>
-            {CHOICES.map((choice) => (
+            {choices.length === 0 && (
+              <Text color="muted" align="center" style={styles.empty}>
+                Nothing to create just yet — this unlocks once your account is approved.
+              </Text>
+            )}
+            {choices.map((choice) => (
               <Pressable
                 key={choice.key}
                 accessibilityRole="button"
@@ -84,4 +97,5 @@ const styles = StyleSheet.create({
   copy: { flex: 1, minWidth: 0, gap: 1 },
   label: { fontSize: 15, lineHeight: 20, fontWeight: "500" },
   description: { fontSize: 12, lineHeight: 16 },
+  empty: { paddingVertical: 24, paddingHorizontal: 8 },
 });

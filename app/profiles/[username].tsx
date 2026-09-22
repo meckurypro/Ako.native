@@ -11,6 +11,7 @@ import { PostCard } from "@/components/feed/PostCard";
 import { type Person, type ProfileMedia, useFollowState, useIdentityPosts, useProfile, useProfileMedia, useToggleFollow } from "@/features/discovery/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useProbationalLock } from "@/features/account/probational";
 
 type Tab = "posts" | "media";
 
@@ -52,11 +53,16 @@ function ProfileHeader({ person, own, locked, showMediaTab, tab, setTab, followL
   const domain = person.website_url?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0];
   const profileUrl = `https://ako.app/profile/${person.username}`;
   const showMore = () => setShareOpen(true);
+  // Probational users don't get the social layer — see
+  // features/account/probational.ts. Hides Follow/Message entirely
+  // rather than disabling them.
+  const followLocked = useProbationalLock("probational_follow_enabled");
+  const messageLocked = useProbationalLock("probational_message_enabled");
 
   return <>
     <View style={s.toolbar}>
-      {own || following ? <View style={{ flex: 1 }} /> : <Pressable onPress={() => router.push("/(tabs)/inbox")} style={[s.messageButton, { borderColor: colors.border }]}><Icon name="message-square" size={16} color={colors.textSecondary} /><Text color="secondary" style={s.actionText}>Message</Text></Pressable>}
-      {own ? <Pressable onPress={() => router.push("/profile/edit")} style={[s.messageButton, { borderColor: colors.border }]}><Text color="secondary" style={s.actionText}>Edit profile</Text></Pressable> : <Pressable disabled={followPending} onPress={() => following ? setRelationshipOpen(true) : onFollow()} style={[s.followButton, { backgroundColor: following ? colors.accentSoft : colors.surfaceElevated, opacity: followPending ? .55 : 1 }]}>{followPending ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={s.followContent}>{following ? <Icon name="user-check" size={14} color={colors.accent} /> : null}<Text style={[s.actionText, { color: following ? colors.accent : colors.text }]}>{followLabel}</Text>{following ? <Icon name="chevron-down" size={14} color={colors.accent} /> : null}</View>}</Pressable>}
+      {own || following || messageLocked ? <View style={{ flex: 1 }} /> : <Pressable onPress={() => router.push("/(tabs)/inbox")} style={[s.messageButton, { borderColor: colors.border }]}><Icon name="message-square" size={16} color={colors.textSecondary} /><Text color="secondary" style={s.actionText}>Message</Text></Pressable>}
+      {own ? <Pressable onPress={() => router.push("/profile/edit")} style={[s.messageButton, { borderColor: colors.border }]}><Text color="secondary" style={s.actionText}>Edit profile</Text></Pressable> : followLocked ? null : <Pressable disabled={followPending} onPress={() => following ? setRelationshipOpen(true) : onFollow()} style={[s.followButton, { backgroundColor: following ? colors.accentSoft : colors.surfaceElevated, opacity: followPending ? .55 : 1 }]}>{followPending ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={s.followContent}>{following ? <Icon name="user-check" size={14} color={colors.accent} /> : null}<Text style={[s.actionText, { color: following ? colors.accent : colors.text }]}>{followLabel}</Text>{following ? <Icon name="chevron-down" size={14} color={colors.accent} /> : null}</View>}</Pressable>}
       <Pressable accessibilityLabel="More options" onPress={showMore} style={s.more}><Icon name="more-horizontal" size={18} color={colors.textSecondary} /></Pressable>
     </View>
     <RelationshipMenu visible={relationshipOpen} person={person} onClose={() => setRelationshipOpen(false)} onMessage={() => { setRelationshipOpen(false); router.push("/(tabs)/inbox"); }} onUnfollow={() => { setRelationshipOpen(false); onFollow(); }} />

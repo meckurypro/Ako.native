@@ -12,6 +12,7 @@ import { EMOJI_CATEGORIES } from "@/features/messaging/emoji";
 import { VoiceNote } from "@/components/messaging/VoiceNote";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useProbationalLock } from "@/features/account/probational";
 
 const EMOJI = ["😀", "😂", "❤️", "👍", "🙏", "🎉", "🔥", "😮", "😢", "👏", "✅", "💯"];
 const WALLPAPER = ["message-circle", "lightbulb", "heart", "star", "rocket", "pencil", "music", "camera"] as const;
@@ -31,6 +32,10 @@ const Wallpaper = memo(function Wallpaper() { const { colors } = useTheme(); ret
 export default function MessageThreadScreen() {
   void EMOJI;
   const router = useRouter(); const { conversationId, draft: draftParam } = useLocalSearchParams<{ conversationId: string; draft?: string }>(); const { colors } = useTheme(); const { user } = useAuth(); const insets = useSafeAreaInsets(); const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 34) : insets.bottom;
+  // Probational users don't get the social layer — see
+  // features/account/probational.ts. Folded into `writable` below so
+  // it reuses the existing "can no longer send messages" fallback.
+  const messageLocked = useProbationalLock("probational_message_enabled");
   const conversation = useConversation(conversationId ?? ""); const messages = useMessages(conversationId ?? ""); const send = useSendMessage(conversationId ?? ""); const sendVoice=useSendVoiceNote(conversationId??""); const recorder=useAudioRecorder(RecordingPresets.HIGH_QUALITY);const recorderState=useAudioRecorderState(recorder,150);
   const list = useRef<FlatList<Message>>(null); const [draft, setDraft] = useState(() => typeof draftParam === "string" ? draftParam : ""); const [showEmoji, setShowEmoji] = useState(false); const [search, setSearch] = useState(false); const [headerMenu, setHeaderMenu] = useState(false); const [query, setQuery] = useState("");const[voicePreview,setVoicePreview]=useState<{uri:string;durationSec:number;viewOnce:boolean}|null>(null);
   const person = conversation.data?.other_participant; const rows = useMemo(() => !query.trim() ? messages.data ?? [] : (messages.data ?? []).filter(message => message.content.toLowerCase().includes(query.trim().toLowerCase())), [messages.data, query]);
@@ -46,7 +51,7 @@ export default function MessageThreadScreen() {
   if (conversation.isError || !conversation.data) return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><ErrorState message="Couldn't open this conversation." onRetry={() => void conversation.refetch()} /></SafeAreaView>;
   const name = conversation.data.is_group && conversation.data.team_page ? conversation.data.team_page.name : person!.display_name;
   const avatar = conversation.data.is_group && conversation.data.team_page ? conversation.data.team_page.avatar_url : person!.avatar_url;
-  const writable = !conversation.data.left_at;
+  const writable = !conversation.data.left_at && !messageLocked;
   return <SafeAreaView edges={["top", "left", "right", "bottom"]} style={[s.root, { backgroundColor: colors.background }]}><KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={8}>
     <View style={[s.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}><Pressable onPress={() => router.back()} style={s.iconButton}><Icon name="arrow-left" size={23} color={colors.textSecondary} /></Pressable><Pressable onPress={openProfile} style={s.identity}><View><Avatar uri={avatar} name={name} size={40} /><View style={[s.presence, { backgroundColor: colors.accent }]} /></View><View style={s.identityText}><Text numberOfLines={1} style={s.name}>{name}</Text><Text numberOfLines={1} color="muted" style={s.status}>{conversation.data.is_group ? "Group conversation" : lastSeen(person?.last_seen_at ?? null)}</Text></View></Pressable><View style={s.menuAnchor}><Pressable onPress={() => setHeaderMenu(value => !value)} style={s.iconButton}><Icon name="more-horizontal" size={22} color={colors.textSecondary} /></Pressable>{headerMenu && <><Pressable onPress={() => setHeaderMenu(false)} style={s.menuDismiss}/><View style={[s.menu,{backgroundColor:colors.surface,borderColor:colors.border}]}><Pressable onPress={() => {setHeaderMenu(false);setSearch(true);}} style={s.menuItem}><Icon name="search" size={17} color={colors.text}/><Text style={s.menuText}>Search</Text></Pressable><Pressable onPress={() => {setHeaderMenu(false);router.push({pathname:"/messages/[conversationId]/hidden",params:{conversationId}});}} style={s.menuItem}><Icon name="eye-off" size={17} color={colors.text}/><Text style={s.menuText}>Hidden messages</Text></Pressable></View></>}</View></View>
     {search && <View style={[s.search, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}><Icon name="search" size={18} color={colors.textMuted} /><TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Search in conversation" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} style={[s.searchInput, { color: colors.text }]} /><Pressable onPress={() => { setSearch(false); setQuery(""); }}><Icon name="x" size={19} color={colors.textMuted} /></Pressable></View>}
