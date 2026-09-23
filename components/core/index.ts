@@ -6,6 +6,7 @@ export * from "./Chip";
 export * from "./Divider";
 export * from "./IconButton";
 export * from "./Input";
+export * from "./MediaViewer";
 export * from "./PressableScale";
 export * from "./Screen";
 export * from "./Section";

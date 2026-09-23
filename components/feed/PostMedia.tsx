@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { IconButton, Text } from "@/components/core";
+import { MediaViewer, Text } from "@/components/core";
 import { useFeedSwipeGesture } from "@/components/feed/FeedSwipeGesture";
 import { useTheme } from "@/providers/ThemeProvider";
 
@@ -62,7 +62,7 @@ export function PostMedia({ urls, compact = false }: { urls: string[]; compact?:
   const [index, setIndex] = useState(0);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [ratio, setRatio] = useState(1);
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
   const { colors } = useTheme();
   const availableWidth = screenWidth - (compact ? 116 : 72);
   const frameWidth = availableWidth * .8;
@@ -74,12 +74,13 @@ export function PostMedia({ urls, compact = false }: { urls: string[]; compact?:
       {urls.length > 1 ? <InlineCarousel urls={urls} width={frameWidth} height={frameHeight} index={index} onIndexChange={setIndex} onOpen={setViewerIndex} onFirstImageLoad={(imageWidth, imageHeight) => { if (imageWidth && imageHeight) setRatio(Math.min(1.91, Math.max(.5, imageWidth / imageHeight))); }} /> : <Pressable onPress={() => setViewerIndex(0)} accessibilityRole="imagebutton" accessibilityLabel="Open post media" style={{ width: frameWidth, height: frameHeight }}>{VIDEO.test(urls[0]) ? <Video uri={urls[0]} width={frameWidth} height={frameHeight} /> : <Image source={{ uri: urls[0] }} style={{ width: frameWidth, height: frameHeight }} contentFit="contain" transition={160} cachePolicy="memory-disk" onLoad={event => { if (event.source.width && event.source.height) setRatio(event.source.width / event.source.height); }} />}</Pressable>}
       {urls.length > 1 ? <><View pointerEvents="none" style={styles.dots}>{urls.map((_, dot) => <View key={dot} style={[styles.dot, dot === index ? styles.dotActive : null]} />)}</View><View pointerEvents="none" style={styles.counter}><Text style={styles.counterText}>{index + 1}/{urls.length}</Text></View></> : null}
     </View>
-    <Modal visible={viewerIndex !== null} animationType="fade" statusBarTranslucent onRequestClose={() => setViewerIndex(null)}>
-      <View style={styles.viewer}>
-        {viewerIndex !== null ? <ScrollView key={viewerIndex} horizontal pagingEnabled showsHorizontalScrollIndicator={false} contentOffset={{ x: viewerIndex * screenWidth, y: 0 }} style={styles.viewerPager}>{urls.map((uri, slide) => <View key={`${uri}-${slide}`} style={{ width: screenWidth, height: screenHeight, justifyContent: "center" }}>{VIDEO.test(uri) ? <Video uri={uri} width={screenWidth} height={screenHeight} controls /> : <Image source={{ uri }} style={{ width: screenWidth, height: screenHeight }} contentFit="contain" />}</View>)}</ScrollView> : null}
-        <View style={styles.close}><IconButton icon="x" label="Close media" onPress={() => setViewerIndex(null)} /></View>
-      </View>
-    </Modal>
+    <MediaViewer
+      visible={viewerIndex !== null}
+      items={urls.map(uri => ({ uri, type: VIDEO.test(uri) ? "video" : "image" }))}
+      initialIndex={viewerIndex ?? 0}
+      onClose={() => setViewerIndex(null)}
+      labelPrefix="media"
+    />
   </>;
 }
 
@@ -91,7 +92,4 @@ const styles = StyleSheet.create({
   dotActive: { width: 16, backgroundColor: "#FFFFFF" },
   counter: { position: "absolute", top: 8, right: 8, backgroundColor: "#0009", borderRadius: 99, paddingHorizontal: 8, paddingVertical: 3 },
   counterText: { color: "#FFFFFF", fontSize: 12, lineHeight: 14, fontWeight: "600" },
-  viewer: { flex: 1, backgroundColor: "#000", justifyContent: "center" },
-  viewerPager: { flex: 1 },
-  close: { position: "absolute", top: 52, right: 18 },
 });
