@@ -15,6 +15,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Avatar, Text } from "@/components/core";
+import { HeadingColorPicker } from "@/components/compose/HeadingColorPicker";
 import { useCategories } from "@/features/onboarding/api";
 import { useActiveIdentity, useCreatePost, useUploadPostMedia } from "@/features/compose/api";
 import { useAuth } from "@/providers/AuthProvider";
@@ -40,12 +41,13 @@ export default function Compose() {
 function ComposeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const identity = useActiveIdentity();
   const categories = useCategories();
   const create = useCreatePost();
   const upload = useUploadPostMedia();
   const [heading, setHeading] = useState("");
+  const [headingColor, setHeadingColor] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [topics, setTopics] = useState<Set<string>>(new Set());
   const [topicsOpen, setTopicsOpen] = useState(false);
@@ -65,6 +67,7 @@ function ComposeScreen() {
     try {
       const post = await create.mutateAsync({
         heading: heading.trim() || undefined,
+        heading_color: headingColor,
         content,
         interest_ids: [...topics],
         media_urls: media,
@@ -138,15 +141,18 @@ function ComposeScreen() {
             </Text>
           </View>
 
-          <TextInput
-            value={heading}
-            onChangeText={(value) => setHeading(value.slice(0, HEADING_LIMIT))}
-            maxLength={HEADING_LIMIT}
-            placeholder="Heading (optional)"
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accent}
-            style={[styles.headingInput, { color: colors.text }]}
-          />
+          <View style={styles.headingRow}>
+            <TextInput
+              value={heading}
+              onChangeText={(value) => setHeading(value.slice(0, HEADING_LIMIT))}
+              maxLength={HEADING_LIMIT}
+              placeholder="Heading (optional)"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              style={[styles.headingInput, { color: colors.text, flex: 1 }]}
+            />
+            <HeadingColorPicker value={headingColor} onChange={setHeadingColor} isDark={isDark} />
+          </View>
           <Text variant="caption" color="muted" style={styles.headingCount}>{heading.length}/{HEADING_LIMIT}</Text>
 
           <View style={styles.formatBar}>
@@ -295,6 +301,7 @@ const styles = StyleSheet.create({
   identity: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
   identityText: { flex: 1, fontSize: 14, lineHeight: 20 },
   identityName: { fontWeight: "600" },
+  headingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   headingInput: { fontFamily: Platform.select({ ios: "Georgia", android: "serif" }), fontSize: 24, lineHeight: 31, paddingHorizontal: 0, paddingVertical: 0 },
   headingCount: { marginTop: 3, marginBottom: 10 },
   formatBar: { height: 32, flexDirection: "row", alignItems: "center", gap: 8 },

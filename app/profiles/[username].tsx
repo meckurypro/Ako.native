@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
-import { Avatar, FacebookGlyph, Text, VerifiedBadge, WhatsAppGlyph, XGlyph } from "@/components/core";
+import { Avatar, FacebookGlyph, MediaViewer, Text, VerifiedBadge, WhatsAppGlyph, XGlyph } from "@/components/core";
 import { ErrorState, Skeleton } from "@/components/feedback";
 import { PostCard } from "@/components/feed/PostCard";
 import { type Person, type ProfileMedia, useFollowState, useIdentityPosts, useProfile, useProfileMedia, useToggleFollow } from "@/features/discovery/api";
@@ -32,6 +32,7 @@ export default function PublicProfileScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const [tab, setTab] = useState<Tab>("posts");
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const profile = useProfile(name);
   const person = profile.data;
   const state = useFollowState(person?.id ?? "");
@@ -79,7 +80,7 @@ export default function PublicProfileScreen() {
       data={rows}
       keyExtractor={(item) => item.type === "identity" ? "identity" : item.type === "tabs" ? "tabs" : item.type === "status" ? `status-${item.mode}` : `${item.type}-${item.id}`}
       renderItem={({ item }) => item.type === "identity"
-        ? <Identity person={person} onLayout={(height) => { headerHeight.value = height; }} />
+        ? <Identity person={person} onAvatarPress={() => setAvatarOpen(true)} onLayout={(height) => { headerHeight.value = height; }} />
         : item.type === "tabs"
           ? <Tabs tabs={tabs} tab={tab} index={tabIndex} onChange={setTab} />
           : item.type === "post"
@@ -100,6 +101,12 @@ export default function PublicProfileScreen() {
     />
     <ProfileToolbar person={person} own={own} following={!!state.data?.following} followLabel={label} followPending={state.isLoading || toggle.isPending} onFollow={follow} style={toolbarStyle} />
     <BottomNavigation />
+    <MediaViewer
+      visible={avatarOpen && !!person.avatar_url}
+      items={person.avatar_url ? [{ uri: person.avatar_url, type: "image" }] : []}
+      onClose={() => setAvatarOpen(false)}
+      labelPrefix={`${person.display_name}'s profile photo`}
+    />
   </SafeAreaView>;
 }
 
@@ -127,11 +134,13 @@ function ProfileToolbar({ person, own, following, followLabel, followPending, on
   </>;
 }
 
-function Identity({ person, onLayout }: { person: Person; onLayout: (height: number) => void }) {
+function Identity({ person, onAvatarPress, onLayout }: { person: Person; onAvatarPress: () => void; onLayout: (height: number) => void }) {
   const domain = person.website_url?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0];
   return <View onLayout={(event) => onLayout(event.nativeEvent.layout.height)}>
     <View style={s.identity}>
-      <Avatar uri={person.avatar_url} name={person.display_name} size={64} />
+      {person.avatar_url
+        ? <Pressable accessibilityRole="button" accessibilityLabel={`View ${person.display_name}'s profile photo`} onPress={onAvatarPress} style={s.avatarButton}><Avatar uri={person.avatar_url} name={person.display_name} size={64} /></Pressable>
+        : <Avatar uri={person.avatar_url} name={person.display_name} size={64} />}
       <View style={s.identityCopy}>
         <Text style={s.name}>{person.display_name}</Text>
         {person.is_verified ? <View style={{ marginTop: 4 }}><VerifiedBadge size={15} label /></View> : null}
@@ -244,6 +253,7 @@ const s = StyleSheet.create({
   actionText: { fontSize: 16, lineHeight: 20, fontWeight: "700" },
   more: { width: 30, height: 42, alignItems: "center", justifyContent: "center" },
   identity: { paddingHorizontal: 18, paddingTop: 16, flexDirection: "row", alignItems: "flex-start", gap: 18 },
+  avatarButton: { width: 64, height: 64, borderRadius: 32 },
   identityCopy: { flex: 1, paddingTop: 7 },
   name: { flexShrink: 1, fontSize: 20, lineHeight: 25, fontWeight: "700" },
   roles: { fontSize: 13, lineHeight: 18, marginTop: 2 },
