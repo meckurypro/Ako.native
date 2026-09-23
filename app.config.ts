@@ -22,6 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       NSCameraUsageDescription: "AKọ uses your camera only when you choose to create media.",
       NSMicrophoneUsageDescription: "AKọ uses your microphone only when you choose to record audio or join a call.",
       NSPhotoLibraryUsageDescription: "AKọ accesses your library only when you choose media to share.",
+      NSFaceIDUsageDescription: "AKọ uses Face ID to unlock the app quickly and keep your account secure.",
     },
   },
   android: {
@@ -45,6 +46,27 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ["expo-image-picker", { "photosPermission": "Choose a photo to use as your AKọ profile image.", "cameraPermission": "Take a photo to use as your AKọ profile image.", "microphonePermission": false }],
     "expo-video",
     "expo-audio",
+    [
+      "expo-notifications",
+      {
+        // No custom sound bundled yet (placeholders are being replaced) — omit
+        // `sounds` entirely so the platform default chime is used until real
+        // assets land, rather than shipping a placeholder into production.
+        // Same for `icon`: Android wants a flat white silhouette (not the
+        // full-color app icon) or it renders as a white square — that asset
+        // doesn't exist yet, so this falls back to the adaptive icon rather
+        // than referencing a file that isn't there.
+        color: "#0B1A15",
+      },
+    ],
+    [
+      "expo-local-authentication",
+      { faceIDPermission: "AKọ uses Face ID to unlock the app quickly and keep your account secure." },
+    ],
+    [
+      "expo-calendar",
+      { calendarPermission: "AKọ accesses your calendar only when you choose to add an event, like a gig or a room meeting, to it." },
+    ],
     [
       "expo-splash-screen",
       {
