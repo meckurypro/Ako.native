@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { File } from "expo-file-system";
 import { adoptAudioFile } from "@/lib/audio-cache";
-import { cacheMessages, cacheProfiles, getCachedConversationPartner, getCachedMessages } from "@/lib/local-cache";
+import { cacheMessages, cacheProfiles, getCachedConversationParticipants, getCachedMessages, getCachedProfile } from "@/lib/local-cache";
 import { enqueueOutboxMessage, enqueueOutboxVoice, isLocalMessageId, makeLocalMessageId, persistOutboxAudio } from "@/lib/outbox";
 import { isCurrentlyOffline } from "@/lib/network";
 
@@ -42,16 +42,22 @@ function findListPlaceholder(client:ReturnType<typeof useQueryClient>,id:string)
 
 export function useConversation(id:string){const{user}=useAuth();const client=useQueryClient();
   // Cold deep link / notification tap with no conversation-list query cached this session:
-  // fall back to profiles_cache, via the other participant's id recovered from messages_cache
-  // (see getCachedConversationPartner). Best-effort and DM-shaped only — it assumes not a
-  // group, which is wrong for a cold-started group chat, but that's strictly better than a
-  // blank header until the real fetch below resolves and overwrites it moments later.
+  // fall back to profiles_cache via the participant(s) recovered from messages_cache (see
+  // getCachedConversationParticipants). One other sender means a DM, so show their profile;
+  // two or more means a group, which we render generically (no page name/avatar is cached
+  // anywhere) rather than misattributing it to whichever sender happened to be last active.
+  // Either way this is strictly better than blank until the real fetch below resolves and
+  // overwrites it moments later.
   useEffect(()=>{
     if(!id||!user||findListPlaceholder(client,id))return;
     let cancelled=false;
-    getCachedConversationPartner(id,user.id).then(partner=>{
-      if(cancelled||!partner)return;
-      client.setQueryData<ConversationDetail>(["mobile-conversation",id,user.id],old=>old??{id,is_group:false,is_request:false,left_at:null,team_page:null,other_participant:{id:partner.id,username:partner.username,display_name:partner.display_name,avatar_url:partner.avatar_url,last_seen_at:partner.last_seen_at??null}});
+    getCachedConversationParticipants(id,user.id).then(async senderIds=>{
+      if(cancelled||senderIds.length===0)return;
+      const placeholder:ConversationDetail|undefined=senderIds.length===1
+        ?await(async()=>{const partner=await getCachedProfile(senderIds[0]);return partner?{id,is_group:false,is_request:false,left_at:null,team_page:null,other_participant:{id:partner.id,username:partner.username,display_name:partner.display_name,avatar_url:partner.avatar_url,last_seen_at:partner.last_seen_at??null}}:undefined;})()
+        :{id,is_group:true,is_request:false,left_at:null,team_page:null,other_participant:{id:"",username:"",display_name:"Group",avatar_url:null,last_seen_at:null}};
+      if(cancelled||!placeholder)return;
+      client.setQueryData<ConversationDetail>(["mobile-conversation",id,user.id],old=>old??placeholder);
     });
     return()=>{cancelled=true;};
   },[id,user,client]);
