@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { File } from "expo-file-system";
 import { adoptAudioFile } from "@/lib/audio-cache";
-import { cacheMessages, cacheProfiles, getCachedMessages } from "@/lib/local-cache";
+import { cacheMessages, cacheProfiles, getCachedConversationParticipants, getCachedMessages, getCachedProfile } from "@/lib/local-cache";
 import { enqueueOutboxMessage, enqueueOutboxVoice, isLocalMessageId, makeLocalMessageId, persistOutboxAudio } from "@/lib/outbox";
 import { isCurrentlyOffline } from "@/lib/network";
 
@@ -33,17 +33,41 @@ async function loadConversations(userId:string,archived:boolean):Promise<Convers
 export function useConversations(archived=false){const{user}=useAuth();return useQuery({queryKey:["mobile-conversations",archived,user?.id],enabled:!!user,queryFn:()=>loadConversations(user!.id,archived),refetchInterval:15000});}
 export function useUpdateConversation(){const{user}=useAuth();const client=useQueryClient();return useMutation({mutationFn:async(input:{id:string;pinned_at?:string|null;archived_at?:string|null;hidden_at?:string|null})=>{if(!user)throw new Error("Not signed in");const{id,...updates}=input;const{error}=await supabase.from("conversation_participants").update(updates).eq("conversation_id",id).eq("user_id",user.id);if(error)throw error;},onSuccess:()=>void client.invalidateQueries({queryKey:["mobile-conversations"]})});}
 
-export function useConversation(id:string){const{user}=useAuth();const client=useQueryClient();return useQuery({queryKey:["mobile-conversation",id,user?.id],enabled:!!user&&!!id,
+// Shared by useConversation's placeholderData and its SQLite fallback effect below.
+function findListPlaceholder(client:ReturnType<typeof useQueryClient>,id:string):ConversationDetail|undefined{
+  const lists=client.getQueriesData<ConversationSummary[]>({queryKey:["mobile-conversations"]});
+  for(const[,data]of lists){const match=data?.find(row=>row.id===id);if(match)return{id:match.id,is_group:match.is_group,is_request:match.is_request,left_at:null,team_page:match.team_page,other_participant:{...match.other_participant,last_seen_at:null}};}
+  return undefined;
+}
+
+export function useConversation(id:string){const{user}=useAuth();const client=useQueryClient();
+  // Cold deep link / notification tap with no conversation-list query cached this session:
+  // fall back to profiles_cache via the participant(s) recovered from messages_cache (see
+  // getCachedConversationParticipants). One other sender means a DM, so show their profile;
+  // two or more means a group, which we render generically (no page name/avatar is cached
+  // anywhere) rather than misattributing it to whichever sender happened to be last active.
+  // Either way this is strictly better than blank until the real fetch below resolves and
+  // overwrites it moments later.
+  useEffect(()=>{
+    if(!id||!user||findListPlaceholder(client,id))return;
+    let cancelled=false;
+    getCachedConversationParticipants(id,user.id).then(async senderIds=>{
+      if(cancelled||senderIds.length===0)return;
+      const placeholder:ConversationDetail|undefined=senderIds.length===1
+        ?await(async()=>{const partner=await getCachedProfile(senderIds[0]);return partner?{id,is_group:false,is_request:false,left_at:null,team_page:null,other_participant:{id:partner.id,username:partner.username,display_name:partner.display_name,avatar_url:partner.avatar_url,last_seen_at:partner.last_seen_at??null}}:undefined;})()
+        :{id,is_group:true,is_request:false,left_at:null,team_page:null,other_participant:{id:"",username:"",display_name:"Group",avatar_url:null,last_seen_at:null}};
+      if(cancelled||!placeholder)return;
+      client.setQueryData<ConversationDetail>(["mobile-conversation",id,user.id],old=>old??placeholder);
+    });
+    return()=>{cancelled=true;};
+  },[id,user,client]);
+  return useQuery({queryKey:["mobile-conversation",id,user?.id],enabled:!!user&&!!id,
   // Seed instantly from whatever conversation-list query is already cached (the inbox
   // screen the user just tapped a row on) so the chat screen never shows a blank/loading
   // header — this is what lets the whole screen mount before the network round trip for
   // full conversation detail (last_seen_at, is_request, etc.) resolves. Falls through to
   // a real loading state only for a cold deep link where no list was fetched this session.
-  placeholderData:():ConversationDetail|undefined=>{
-    const lists=client.getQueriesData<ConversationSummary[]>({queryKey:["mobile-conversations"]});
-    for(const[,data]of lists){const match=data?.find(row=>row.id===id);if(match)return{id:match.id,is_group:match.is_group,is_request:match.is_request,left_at:null,team_page:match.team_page,other_participant:{...match.other_participant,last_seen_at:null}};}
-    return undefined;
-  },
+  placeholderData:():ConversationDetail|undefined=>findListPlaceholder(client,id),
   queryFn:async():Promise<ConversationDetail>=>{const[{data:conversation,error:conversationError},{data:mine,error:mineError},{data:other,error:otherError}]=await Promise.all([supabase.from("conversations").select("id, is_group, team_page:pages!conversations_team_page_id_fkey(id, username, name, avatar_url)").eq("id",id).single(),supabase.from("conversation_participants").select("is_request, left_at").eq("conversation_id",id).eq("user_id",user!.id).single(),supabase.from("conversation_participants").select("profile:profiles!conversation_participants_user_id_fkey(id, username, display_name, avatar_url, last_seen_at)").eq("conversation_id",id).neq("user_id",user!.id).limit(1).maybeSingle()]);if(conversationError)throw conversationError;if(mineError)throw mineError;if(otherError)throw otherError;const page=Array.isArray((conversation as any).team_page)?(conversation as any).team_page[0]:(conversation as any).team_page;const profile=Array.isArray((other as any)?.profile)?(other as any).profile[0]:(other as any)?.profile;if(profile)void cacheProfiles([profile]);return{id:conversation.id,is_group:conversation.is_group,is_request:mine.is_request??false,left_at:mine.left_at,team_page:page??null,other_participant:profile??{id:"",username:"",display_name:page?.name??"Group",avatar_url:page?.avatar_url??null,last_seen_at:null}};}});}
 
 export function useMessages(conversationId:string){

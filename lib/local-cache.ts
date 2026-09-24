@@ -49,6 +49,23 @@ export async function pruneStaleProfiles() {
   await safeDb(async db => db.runAsync("DELETE FROM profiles_cache WHERE cached_at < ?;", [Date.now() - PROFILE_TTL_MS]));
 }
 
+// There's no local table mapping conversation -> participants, but messages_cache
+// already has one: the distinct senders (other than me) in a conversation's cached
+// messages, most-recently-active first. One sender means a DM — look their profile
+// up in profiles_cache. Two or more means a group, which useConversation's caller
+// renders generically rather than guessing which sender is "the" partner.
+export async function getCachedConversationParticipants(conversationId: string, myUserId: string): Promise<string[]> {
+  const rows = await safeDb(async db =>
+    db.getAllAsync<{ sender_id: string }>(
+      `SELECT sender_id, MAX(created_at) AS last_at FROM messages_cache
+       WHERE conversation_id = ? AND sender_id != ?
+       GROUP BY sender_id ORDER BY last_at DESC LIMIT 5;`,
+      [conversationId, myUserId],
+    ),
+  );
+  return (rows ?? []).map(row => row.sender_id);
+}
+
 export async function cacheMessages(conversationId: string, messages: Message[]) {
   if (!messages.length) return;
   await safeDb(async db => {
