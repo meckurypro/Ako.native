@@ -7,13 +7,12 @@
 import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
-import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { File, Paths } from "expo-file-system";
 import { ensurePermission } from "@/lib/permissions";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { isNotificationsOptedOut } from "./settings";
+import { getEasProjectId, saveTokenRow } from "./pushToken";
 
 // Foreground notifications still show a banner/sound — without this handler
 // Expo suppresses them entirely while the app is open.
@@ -38,6 +37,9 @@ function markPrompted() {
   } catch { /* if this fails we may ask once more next launch; harmless */ }
 }
 
+// Notification requests already routed, so one tap can never navigate twice.
+const handledResponses = new Set<string>();
+
 async function registerToken(userId: string) {
   if (Platform.OS === "web") return; // push_tokens.platform is constrained to ios/android; no push support on web anyway
   if (await isNotificationsOptedOut()) return; // explicit "off" from Settings (features/notifications/settings.ts) — don't silently re-register
@@ -60,17 +62,11 @@ async function registerToken(userId: string) {
     }
     if (!granted) return;
 
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const projectId = getEasProjectId();
     if (!projectId) { console.warn("registerToken: no EAS projectId in app config, skipping"); return; }
 
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-
-    // Upsert on `token` (not `user_id`) so a device that switches accounts hands its
-    // token to whoever is signed in now, rather than accumulating stale rows per device.
-    const { error } = await supabase
-      .from("push_tokens")
-      .upsert({ token, user_id: userId, platform: Platform.OS, last_seen_at: new Date().toISOString() }, { onConflict: "token" });
-    if (error) console.warn("push token upsert failed", error);
+    await saveTokenRow(token, userId);
   } catch (error) {
     // Expected on simulators/emulators (no push capability) and occasionally right
     // after a fresh install before the OS has finished provisioning; not fatal.
@@ -90,29 +86,37 @@ export function usePushRegistration() {
     return () => sub.remove();
   }, [user?.id]);
 
-  // Cold start: the listener below only sees taps that happen while the app process is alive, so a
-  // notification that *launched* the app from closed has to be read back once, after sign-in
-  // (navigating any earlier would race the root layout mounting).
+  // Cold start: the live listener below only sees taps while the process is alive, so a notification
+  // that *launched* the app from closed is read back once, after sign-in (navigating earlier would race
+  // the root layout mounting). The biometric gate renders as an overlay above the navigator, so pushing
+  // the route here doesn't bypass the lock: the conversation only becomes visible after unlock.
   const handledColdStart = useRef(false);
   useEffect(() => {
     if (!user || handledColdStart.current) return;
     handledColdStart.current = true;
-    const response = Notifications.getLastNotificationResponse();
-    const data = response?.notification.request.content.data as { conversationId?: string } | undefined;
-    if (!data?.conversationId) return;
-    Notifications.clearLastNotificationResponse();
-    router.push({ pathname: "/messages/[conversationId]", params: { conversationId: data.conversationId } });
+    if (openConversationFromResponse(router, Notifications.getLastNotificationResponse())) Notifications.clearLastNotificationResponse();
   }, [user, router]);
 
   // Tapping a notification while the app is running (foreground or backgrounded) deep-links into the
-  // conversation it was about, matching what tapping the same message would do in-app.
-  const routerRef = useRef(router);
-  routerRef.current = router;
+  // conversation it was about. Ignored while signed out: there is no account to show that chat for.
+  const signedIn = !!user;
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { conversationId?: string } | undefined;
-      if (data?.conversationId) routerRef.current.push({ pathname: "/messages/[conversationId]", params: { conversationId: data.conversationId } });
-    });
+    if (!signedIn) return;
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => openConversationFromResponse(router, response));
     return () => sub.remove();
-  }, []);
+  }, [signedIn, router]);
+}
+
+// Both the cold-start read and the live listener can deliver the same tap (on some platforms the
+// listener also fires for the notification that launched the app), so each response is handled at
+// most once, keyed by the notification's request identifier.
+function openConversationFromResponse(router: ReturnType<typeof useRouter>, response: Notifications.NotificationResponse | null | undefined): boolean {
+  if (!response) return false;
+  const id = response.notification.request.identifier;
+  if (handledResponses.has(id)) return false;
+  const data = response.notification.request.content.data as { conversationId?: string } | undefined;
+  if (!data?.conversationId) return false;
+  handledResponses.add(id);
+  router.push({ pathname: "/messages/[conversationId]", params: { conversationId: data.conversationId } });
+  return true;
 }
