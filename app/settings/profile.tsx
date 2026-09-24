@@ -9,6 +9,7 @@ import { Avatar, Button, Input, Text } from "@/components/core";
 import { useAvatarUpload } from "@/features/profile/useAvatarUpload";
 import { friendlyAuthError, normalizeUsername } from "@/features/auth/validation";
 import { useBiometricCapability, useBiometricLockSetting } from "@/features/security/biometric";
+import { useNotificationSettings } from "@/features/notifications/settings";
 import { ensurePermission } from "@/lib/permissions";
 import {
   useBlockedList,
@@ -33,7 +34,7 @@ import {
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme, type ThemePreference } from "@/providers/ThemeProvider";
 
-type SectionId = "profile" | "security" | "privacy" | "appearance" | "sound" | "advanced";
+type SectionId = "profile" | "security" | "privacy" | "appearance" | "notifications" | "sound" | "advanced";
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; description: string; icon: IconName }[] = [
   { value: "light", label: "Light", description: "Always use the light theme", icon: "sun" },
@@ -64,6 +65,7 @@ export default function SettingsScreen() {
       <SettingsSection id="security" icon="key-round" title="Account & security" open={open} setOpen={setOpen}><SecurityForm /></SettingsSection>
       <SettingsSection id="privacy" icon="shield" title="Privacy" summary={profile.data.is_private ? "Private" : "Public"} open={open} setOpen={setOpen}><PrivacySettings profile={profile.data} /></SettingsSection>
       <SettingsSection id="appearance" icon="palette" title="Appearance" summary={THEME_OPTIONS.find(option => option.value === preference)?.label ?? "System"} open={open} setOpen={setOpen}><AppearanceSettings /></SettingsSection>
+      <SettingsSection id="notifications" icon="bell" title="Notifications" open={open} setOpen={setOpen}><NotificationSettings /></SettingsSection>
       <SettingsSection id="sound" icon="volume-2" title="Sound" open={open} setOpen={setOpen}><SoundSettings /></SettingsSection>
       <SettingsSection id="advanced" icon="sliders-horizontal" title="Advanced" danger open={open} setOpen={setOpen}><AdvancedSettings /></SettingsSection>
       <LogoutButton />
@@ -176,6 +178,12 @@ function AccountList({ title, icon, kind }: { title: string; icon: IconName; kin
 function AccountRowView({ account, label, onPress }: { account: AccountRow; label: string; onPress: () => void }) { const { colors } = useTheme(); return <View style={[s.accountRow, { backgroundColor: colors.surfaceElevated }]}><View style={s.accountIdentity}><Avatar uri={account.avatar_url} name={account.display_name} size={34} /><View><Text style={s.accountName}>{account.display_name}</Text><Text color="muted" style={s.accountUsername}>@{account.username}</Text></View></View><Pressable onPress={onPress}><Text color="accent" style={s.rowAction}>{label}</Text></Pressable></View>; }
 
 function AppearanceSettings() { const { colors, preference, setPreference } = useTheme(); return <View style={[s.optionGroup, { borderColor: colors.border }]}>{THEME_OPTIONS.map((option, index) => <OptionRow key={option.value} first={index === 0} icon={option.icon} label={option.label} description={option.description} selected={preference === option.value} onPress={() => void setPreference(option.value)} />)}</View>; }
+
+function NotificationSettings() {
+  const { user } = useAuth();
+  const notifications = useNotificationSettings(user?.id);
+  return <View><ToggleRow icon={notifications.enabled ? "bell" : "bell-off"} title="Push notifications" description="Get notified about new messages, gifts, and activity on your posts" checked={notifications.enabled} pending={notifications.loading} onToggle={() => void notifications.setEnabled(!notifications.enabled)} /></View>;
+}
 
 function SoundSettings() { const sound = useSoundSettings(); const { colors } = useTheme(); const label = sound.enabled ? (SOUND_OPTIONS.find(option => option.value === sound.mode)?.label ?? "Normal") : "Off"; return <View><ToggleRow icon={sound.enabled ? "volume-2" : "volume-x"} title="Sounds" description="Play sounds for messages, likes, gifts, and more" checked={sound.enabled} pending={false} onToggle={() => void sound.setEnabled(!sound.enabled)} />{sound.enabled ? <View style={[s.optionGroup, { borderColor: colors.border }]}>{SOUND_OPTIONS.map((option, index) => <OptionRow key={option.value} first={index === 0} icon={option.icon} label={option.label} description={option.description} selected={sound.mode === option.value} onPress={() => void sound.setMode(option.value)} />)}</View> : null}<Text color="muted" variant="caption" style={s.soundSummary}>Current sound mode: {label}</Text></View>; }
 

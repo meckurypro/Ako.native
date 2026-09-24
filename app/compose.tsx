@@ -19,6 +19,8 @@ import { Avatar, Text } from "@/components/core";
 import { HeadingColorPicker } from "@/components/compose/HeadingColorPicker";
 import { useCategories } from "@/features/onboarding/api";
 import { useActiveIdentity, useCreatePost, useUploadPostMedia } from "@/features/compose/api";
+import { isCurrentlyOffline } from "@/lib/network";
+import { enqueueOutboxPost, makeLocalPostId } from "@/lib/outbox";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ProbationalLock } from "@/components/account/ProbationalLock";
@@ -65,16 +67,29 @@ function ComposeScreen() {
   const submit = async (status?: "draft") => {
     if (!canSubmit) return;
     setError(null);
+    const body = {
+      heading: heading.trim() || undefined,
+      heading_color: headingColor,
+      content,
+      interest_ids: [...topics],
+      media_urls: media,
+      ...(status ? { status } : {}),
+      ...(postingAsPage ? { posted_as_page_id: postingAsPage.id } : {}),
+    };
+
+    // No network: queue it (lib/outbox.ts) instead of failing outright. There's
+    // no server row yet, so — unlike a normal publish — we can't route to the
+    // post's own detail page; drop back to the feed, where it'll appear once
+    // the outbox flushes on reconnect.
+    if (await isCurrentlyOffline()) {
+      await enqueueOutboxPost(makeLocalPostId(), body);
+      Alert.alert("You're offline", "This post will publish automatically once you're back online.");
+      router.replace("/(tabs)/home");
+      return;
+    }
+
     try {
-      const post = await create.mutateAsync({
-        heading: heading.trim() || undefined,
-        heading_color: headingColor,
-        content,
-        interest_ids: [...topics],
-        media_urls: media,
-        ...(status ? { status } : {}),
-        ...(postingAsPage ? { posted_as_page_id: postingAsPage.id } : {}),
-      });
+      const post = await create.mutateAsync(body);
       if (status) Alert.alert("Draft saved", "Your post is available in your drafts.");
       router.replace(status ? "/(tabs)/home" : { pathname: "/posts/[postId]", params: { postId: post.id } });
     } catch (err) {
