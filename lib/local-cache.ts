@@ -49,6 +49,22 @@ export async function pruneStaleProfiles() {
   await safeDb(async db => db.runAsync("DELETE FROM profiles_cache WHERE cached_at < ?;", [Date.now() - PROFILE_TTL_MS]));
 }
 
+// There's no local table mapping conversation -> other participant, but
+// messages_cache already has one: the most recent cached message not sent by
+// the current user tells us who that is, which is enough to pull a profile
+// out of profiles_cache for the chat header's cold-start placeholder when no
+// conversation-list query is cached this session (see useConversation).
+export async function getCachedConversationPartner(conversationId: string, myUserId: string): Promise<CachedProfile | undefined> {
+  const sender = await safeDb(async db =>
+    db.getFirstAsync<{ sender_id: string }>(
+      "SELECT sender_id FROM messages_cache WHERE conversation_id = ? AND sender_id != ? ORDER BY created_at DESC LIMIT 1;",
+      [conversationId, myUserId],
+    ),
+  );
+  if (!sender?.sender_id) return undefined;
+  return getCachedProfile(sender.sender_id);
+}
+
 export async function cacheMessages(conversationId: string, messages: Message[]) {
   if (!messages.length) return;
   await safeDb(async db => {
