@@ -49,11 +49,12 @@ export function VoiceRecordingHeldHint({ dragX, dragY, durationMillis }: HeldPro
   );
 }
 
-type LockedProps = { peaks: number[]; durationMillis: number; onCancel: () => void; onSend: () => void };
+type LockedProps = { peaks: number[]; durationMillis: number; paused: boolean; onTogglePause: () => void; onCancel: () => void; onSend: () => void };
 
-// Shown once locked: recording continues hands-free. Trash discards, the
-// accent button sends — same as the tap-to-record preview bar below it.
-export function VoiceRecordingLockedBar({ peaks, durationMillis, onCancel, onSend }: LockedProps) {
+// Shown once locked: recording continues hands-free. Trash discards, the pause button holds the
+// recording (send and discard keep working while paused), the accent button sends — same as the
+// tap-to-record preview bar below it.
+export function VoiceRecordingLockedBar({ peaks, durationMillis, paused, onTogglePause, onCancel, onSend }: LockedProps) {
   const { colors } = useTheme();
   return (
     <View style={[locked.root, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
@@ -61,10 +62,13 @@ export function VoiceRecordingLockedBar({ peaks, durationMillis, onCancel, onSen
         <Icon name="trash-2" size={20} color={colors.danger} />
       </Pressable>
       <View style={[locked.wave, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <View style={[locked.dot, { backgroundColor: colors.danger }]} />
-        <LiveWaveform peaks={peaks} color={colors.accent} />
+        <View style={[locked.dot, { backgroundColor: paused ? colors.textMuted : colors.danger }]} />
+        <LiveWaveform peaks={peaks} color={paused ? colors.textMuted : colors.accent} />
         <Text style={locked.timer}>{formatDuration(durationMillis)}</Text>
       </View>
+      <Pressable onPress={onTogglePause} style={locked.iconButton} accessibilityLabel={paused ? "Resume recording" : "Pause recording"}>
+        <Icon name={paused ? "play" : "pause"} size={20} color={colors.accent} />
+      </Pressable>
       <Pressable onPress={onSend} style={[locked.send, { backgroundColor: colors.accent }]} accessibilityLabel="Send voice note">
         <Icon name="send" size={19} color="#07130D" />
       </Pressable>
