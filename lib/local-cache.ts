@@ -49,20 +49,21 @@ export async function pruneStaleProfiles() {
   await safeDb(async db => db.runAsync("DELETE FROM profiles_cache WHERE cached_at < ?;", [Date.now() - PROFILE_TTL_MS]));
 }
 
-// There's no local table mapping conversation -> other participant, but
-// messages_cache already has one: the most recent cached message not sent by
-// the current user tells us who that is, which is enough to pull a profile
-// out of profiles_cache for the chat header's cold-start placeholder when no
-// conversation-list query is cached this session (see useConversation).
-export async function getCachedConversationPartner(conversationId: string, myUserId: string): Promise<CachedProfile | undefined> {
-  const sender = await safeDb(async db =>
-    db.getFirstAsync<{ sender_id: string }>(
-      "SELECT sender_id FROM messages_cache WHERE conversation_id = ? AND sender_id != ? ORDER BY created_at DESC LIMIT 1;",
+// There's no local table mapping conversation -> participants, but messages_cache
+// already has one: the distinct senders (other than me) in a conversation's cached
+// messages, most-recently-active first. One sender means a DM — look their profile
+// up in profiles_cache. Two or more means a group, which useConversation's caller
+// renders generically rather than guessing which sender is "the" partner.
+export async function getCachedConversationParticipants(conversationId: string, myUserId: string): Promise<string[]> {
+  const rows = await safeDb(async db =>
+    db.getAllAsync<{ sender_id: string }>(
+      `SELECT sender_id, MAX(created_at) AS last_at FROM messages_cache
+       WHERE conversation_id = ? AND sender_id != ?
+       GROUP BY sender_id ORDER BY last_at DESC LIMIT 5;`,
       [conversationId, myUserId],
     ),
   );
-  if (!sender?.sender_id) return undefined;
-  return getCachedProfile(sender.sender_id);
+  return (rows ?? []).map(row => row.sender_id);
 }
 
 export async function cacheMessages(conversationId: string, messages: Message[]) {

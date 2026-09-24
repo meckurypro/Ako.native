@@ -21,7 +21,8 @@ import { useCategories } from "@/features/onboarding/api";
 import { useActiveIdentity, useCreatePost, useUploadPostMedia } from "@/features/compose/api";
 import { isCurrentlyOffline } from "@/lib/network";
 import { makeUuid } from "@/lib/uuid";
-import { enqueueOutboxPost, makeLocalPostId } from "@/lib/outbox";
+import { deleteOutboxMedia, enqueueOutboxPost, makeLocalPostId, persistOutboxImage, type OutboxLocalMedia } from "@/lib/outbox";
+import { validatePostImage } from "@/lib/post-media";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ProbationalLock } from "@/components/account/ProbationalLock";
@@ -61,6 +62,9 @@ function ComposeScreen() {
   // One idempotency key per publish attempt, reused if the request fails or times out and the user
   // taps Post again (the first one may have landed), and only replaced once a post is really created.
   const requestKey = useRef<string | null>(null);
+  // Photos picked while offline. `media` holds what the grid shows (a public URL once uploaded, or the
+  // local copy's file:// URI until then); this maps each local URI to what the outbox needs to upload it.
+  const localMedia = useRef(new Map<string, OutboxLocalMedia>());
 
   const postingAsPage = identity.data?.mode === "page" ? identity.data.page : null;
   const displayName = postingAsPage?.name ?? profile?.display_name ?? "You";
@@ -72,13 +76,14 @@ function ComposeScreen() {
     if (!canSubmit) return;
     setError(null);
     requestKey.current ??= makeUuid();
+    const localItems = media.flatMap((uri) => { const item = localMedia.current.get(uri); return item ? [item] : []; });
     const body = {
       client_request_id: requestKey.current,
       heading: heading.trim() || undefined,
       heading_color: headingColor,
       content,
       interest_ids: [...topics],
-      media_urls: media,
+      media_urls: media.filter((uri) => !localMedia.current.has(uri)),
       ...(status ? { status } : {}),
       ...(postingAsPage ? { posted_as_page_id: postingAsPage.id } : {}),
     };
@@ -88,7 +93,10 @@ function ComposeScreen() {
     // post's own detail page; drop back to the feed, where it'll appear once
     // the outbox flushes on reconnect.
     if (await isCurrentlyOffline()) {
-      await enqueueOutboxPost(makeLocalPostId(), body);
+      // Photos picked offline travel with the queued post (their copies now belong to the outbox, which
+      // uploads them before creating the post); already-uploaded ones are just URLs in media_urls.
+      await enqueueOutboxPost(makeLocalPostId(), { ...body, ...(localItems.length ? { local_media: localItems } : {}) });
+      localMedia.current.clear();
       requestKey.current = null;
       Alert.alert("You're offline", "This post will publish automatically once you're back online.");
       router.replace("/(tabs)/home");
@@ -96,7 +104,23 @@ function ComposeScreen() {
     }
 
     try {
+      // Back online with photos that were picked offline: upload them now, then publish as usual.
+      if (localItems.length) {
+        const uploaded: string[] = [];
+        for (const item of localItems) {
+          const url = await upload.mutateAsync({ uri: item.uri, mimeType: item.mimeType, fileName: item.fileName });
+          uploaded.push(url);
+          // Swap the local copy for its URL as soon as it's up, so if publishing then fails and the person
+          // taps Post again, this photo isn't uploaded a second time.
+          setMedia((previous) => previous.map((entry) => (entry === item.uri ? url : entry)));
+          localMedia.current.delete(item.uri);
+          deleteOutboxMedia([item]);
+        }
+        body.media_urls = [...body.media_urls, ...uploaded];
+      }
       const post = await create.mutateAsync(body);
+      deleteOutboxMedia(localItems);
+      localMedia.current.clear();
       requestKey.current = null;
       if (status) Alert.alert("Draft saved", "Your post is available in your drafts.");
       router.replace(status ? "/(tabs)/home" : { pathname: "/posts/[postId]", params: { postId: post.id } });
@@ -113,7 +137,7 @@ function ComposeScreen() {
     Alert.alert("Keep this post?", "Save it as a draft or discard your changes.", [
       { text: "Keep editing", style: "cancel" },
       { text: "Save draft", onPress: () => void submit("draft") },
-      { text: "Discard", style: "destructive", onPress: () => router.back() },
+      { text: "Discard", style: "destructive", onPress: () => { deleteOutboxMedia([...localMedia.current.values()]); localMedia.current.clear(); router.back(); } },
     ]);
   };
 
@@ -130,13 +154,33 @@ function ComposeScreen() {
     if (result.canceled) return;
     for (const asset of result.assets) {
       try {
-        const url = await upload.mutateAsync(asset);
-        setMedia((previous) => [...previous, url]);
+        // No network (or it drops mid-upload): keep a durable copy and let the outbox upload it later.
+        if (await isCurrentlyOffline()) { keepOffline(asset); continue; }
+        try {
+          const url = await upload.mutateAsync(asset);
+          setMedia((previous) => [...previous, url]);
+        } catch (err) {
+          if (await isCurrentlyOffline()) { keepOffline(asset); continue; }
+          throw err;
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload failed.");
         break;
       }
     }
+  };
+
+  const keepOffline = (asset: ImagePicker.ImagePickerAsset) => {
+    validatePostImage(asset); // same type/size rules as an online upload, so a bad file is refused now, not on flush
+    const copy = persistOutboxImage(asset);
+    localMedia.current.set(copy.uri, copy);
+    setMedia((previous) => [...previous, copy.uri]);
+  };
+
+  const removeMedia = (uri: string) => {
+    const local = localMedia.current.get(uri);
+    if (local) { deleteOutboxMedia([local]); localMedia.current.delete(uri); }
+    setMedia((items) => items.filter((item) => item !== uri));
   };
 
   const toggleTopic = (id: string) => setTopics((previous) => {
@@ -206,7 +250,7 @@ function ComposeScreen() {
               {media.map((url) => (
                 <View key={url} style={[styles.mediaItem, { backgroundColor: colors.surface }]}>
                   <Image source={{ uri: url }} style={styles.mediaImage} />
-                  <Pressable accessibilityLabel="Remove attachment" onPress={() => setMedia((items) => items.filter((item) => item !== url))} style={styles.removeMedia}>
+                  <Pressable accessibilityLabel="Remove attachment" onPress={() => removeMedia(url)} style={styles.removeMedia}>
                     <Icon name="x" size={15} color="#fff" />
                   </Pressable>
                 </View>
