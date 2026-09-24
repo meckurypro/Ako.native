@@ -4,6 +4,9 @@ import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { useActiveIdentity } from "@/features/compose/api";
+import { isCurrentlyOffline } from "@/lib/network";
+import { enqueueOutboxComment, enqueueOutboxReaction, isLocalCommentId, makeLocalCommentId, reactionKey } from "@/lib/outbox";
+import { makeUuid } from "@/lib/uuid";
 import type { Comment, FeedMode, Post, Stance } from "./types";
 const PAGE_SIZE=15;
 const AUTHOR_SELECT="id, username, display_name, avatar_url, tier, is_verified, is_private, profile_roles(position, role:roles(label))";
@@ -35,6 +38,8 @@ export function useToggleReaction(postId:string,type:"like"|"dislike"){
   return useMutation({mutationFn:async(active:boolean)=>{
     if(!user)throw new Error("Not signed in");
     if(!ready)throw new Error("Still loading your account. Try again in a moment.");
+    // Offline: queue the state the person wants (not a toggle); the outbox applies it on reconnect. The optimistic cache write in onMutate already shows it.
+    if(await isCurrentlyOffline()){await enqueueOutboxReaction(user.id,{key:reactionKey("post",postId,type,pageId),target:"post",targetId:postId,type,desired:!active,pageId,postId});return;}
     if(active){
       let query=supabase.from("reactions").delete().eq("post_id",postId).eq("user_id",user.id).eq("type",type);
       query=pageId?query.eq("acted_as_page_id",pageId):query.is("acted_as_page_id",null);
@@ -48,7 +53,27 @@ export function useBookmark(postId:string){const{user}=useAuth();return useQuery
 export function useToggleBookmark(postId:string){const{user}=useAuth();const client=useQueryClient();const key=["bookmark",postId,user?.id];return useMutation({mutationFn:async(active:boolean)=>{if(!user)throw new Error("Not signed in");const{error}=active?await supabase.from("bookmarks").delete().eq("post_id",postId).eq("user_id",user.id):await supabase.from("bookmarks").insert({post_id:postId,user_id:user.id});if(error)throw error;},onMutate:async(active)=>{await client.cancelQueries({queryKey:key});const previous=client.getQueryData(key);client.setQueryData(key,!active);return{previous};},onError:(_e,_v,c)=>client.setQueryData(key,c?.previous),onSettled:()=>void client.invalidateQueries({queryKey:key})});}
 export function useComments(postId:string){return useQuery({queryKey:["comments",postId],enabled:!!postId,queryFn:async():Promise<Comment[]>=>{const{data,error}=await supabase.from("comments").select("*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)").eq("post_id",postId).is("parent_comment_id",null).eq("is_deleted",false).order("created_at",{ascending:true});if(error)throw error;return data as unknown as Comment[];}});}
 export function useReplies(postId:string,parentId:string,enabled:boolean){return useQuery({queryKey:["comments",postId,"replies",parentId],enabled:enabled&&!!postId&&!!parentId,queryFn:async():Promise<Comment[]>=>{const{data,error}=await supabase.from("comments").select("*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)").eq("post_id",postId).eq("parent_comment_id",parentId).eq("is_deleted",false).order("created_at",{ascending:true});if(error)throw error;return data as unknown as Comment[];}});}
-export function useCreateComment(postId:string){const client=useQueryClient();return useMutation({mutationFn:async(input:{content:string;stance?:Stance;parent_comment_id?:string})=>{const{data,error}=await supabase.functions.invoke("create-comment",{body:{post_id:postId,...input}});if(error)throw new Error(await functionError(error,"Couldn’t post this comment."));if(data?.error)throw new Error(data.error);return data.comment;},onSuccess:()=>{void client.invalidateQueries({queryKey:["comments",postId]});void client.invalidateQueries({queryKey:["feed"]});void client.invalidateQueries({queryKey:["post",postId]});}});}
+export function useCreateComment(postId:string){
+  const{user,profile}=useAuth();const client=useQueryClient();
+  return useMutation({mutationFn:async(input:{content:string;stance?:Stance;parent_comment_id?:string}):Promise<Comment>=>{
+    // Offline: queue it (lib/outbox.ts) and hand back a placeholder so the composer closes and the comment shows up, marked as waiting, until it is sent.
+    if(await isCurrentlyOffline()){
+      if(!user)throw new Error("Not signed in");
+      const localId=makeLocalCommentId();
+      await enqueueOutboxComment(localId,user.id,{postId,content:input.content,stance:input.stance,parentCommentId:input.parent_comment_id,clientRequestId:makeUuid()});
+      return{id:localId,post_id:postId,parent_comment_id:input.parent_comment_id??null,author_id:user.id,content:input.content,stance:input.stance??null,like_count:0,dislike_count:0,reply_count:0,created_at:new Date().toISOString(),author:{id:user.id,username:profile?.username??"",display_name:profile?.display_name??"You",avatar_url:profile?.avatar_url??null}};
+    }
+    const{data,error}=await supabase.functions.invoke("create-comment",{body:{post_id:postId,...input}});if(error)throw new Error(await functionError(error,"Couldn’t post this comment."));if(data?.error)throw new Error(data.error);return data.comment;
+  },onSuccess:(comment)=>{
+    if(isLocalCommentId(comment.id)){
+      // Show the queued comment where it will live once it is sent; the refetch after the outbox flush replaces it with the real one.
+      const key=comment.parent_comment_id?["comments",postId,"replies",comment.parent_comment_id]:["comments",postId];
+      client.setQueryData<Comment[]>(key,old=>[...(old??[]),comment]);
+      return;
+    }
+    void client.invalidateQueries({queryKey:["comments",postId]});void client.invalidateQueries({queryKey:["feed"]});void client.invalidateQueries({queryKey:["post",postId]});
+  }});
+}
 export function useCommentReaction(commentId:string,type:"like"|"dislike"){
   const{user}=useAuth();const{ready,pageId}=useActingIdentity();
   return useQuery({queryKey:["comment-reaction",commentId,type,user?.id,pageId],enabled:!!user&&!!commentId&&ready,queryFn:async()=>{
@@ -63,6 +88,7 @@ export function useToggleCommentReaction(postId:string,commentId:string,type:"li
   return useMutation({mutationFn:async(active:boolean)=>{
     if(!user)throw new Error("Not signed in");
     if(!ready)throw new Error("Still loading your account. Try again in a moment.");
+    if(await isCurrentlyOffline()){await enqueueOutboxReaction(user.id,{key:reactionKey("comment",commentId,type,pageId),target:"comment",targetId:commentId,type,desired:!active,pageId,postId});return;}
     if(active){
       let query=supabase.from("reactions").delete().eq("comment_id",commentId).eq("user_id",user.id).eq("type",type).eq("target_type","comment");
       query=pageId?query.eq("acted_as_page_id",pageId):query.is("acted_as_page_id",null);
