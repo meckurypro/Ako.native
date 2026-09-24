@@ -10,18 +10,20 @@
 //    post creation (kind='post', conversation_id null); v5 scopes rows per user (user_id) and
 //    adds retry bookkeeping (status, next_attempt_at) — see lib/outbox.ts.
 //
+// The file is encrypted at rest (lib/db-encryption.ts).
+//
 // Everything here except `outbox` is a cache of one user's server data and is wiped whenever the
 // signed-in user changes (resetLocalData, driven by lib/local-data.ts). `outbox` is user-scoped
 // instead, so unsent items survive a sign-out and only ever flush for the account that made them.
 import * as SQLite from "expo-sqlite";
-
-const DB_NAME = "ako-cache.db";
+import { openEncryptedDatabase } from "./db-encryption";
 const SCHEMA_VERSION = 5;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 async function openDb(): Promise<SQLite.SQLiteDatabase> {
-  const db = await SQLite.openDatabaseAsync(DB_NAME);
+  // Encrypted at rest (SQLCipher); migrates the old plaintext file on first launch. See lib/db-encryption.ts.
+  const db = await openEncryptedDatabase();
   await db.execAsync("PRAGMA journal_mode = WAL;");
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version;");
   const currentVersion = row?.user_version ?? 0;
@@ -133,7 +135,11 @@ async function openDb(): Promise<SQLite.SQLiteDatabase> {
 
 // Single shared connection + open promise, so concurrent callers await the same init.
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
-  if (!dbPromise) dbPromise = openDb();
+  if (!dbPromise) {
+    // A failed open must not be cached: the cause can be transient (key store unavailable while the
+    // device is locked), and a remembered rejection would disable the cache and outbox until restart.
+    dbPromise = openDb().catch((error) => { dbPromise = null; throw error; });
+  }
   return dbPromise;
 }
 

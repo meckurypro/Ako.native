@@ -28,6 +28,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: ANDROID_PACKAGE,
     softwareKeyboardLayoutMode: "resize",
+    // The local database is encrypted with a key that lives in the Android Keystore, which is never
+    // backed up. Auto Backup would restore the database file (and SecureStore's ciphertext) onto a
+    // device that has no key for them, so opt out rather than rely on recovering from that.
+    allowBackup: false,
     // Foreground/monochrome are a padded white wordmark on transparent (inside Android's 66dp safe circle, so no mask crops it);
     // the background is the icon's own dark green, the same colour as assets/icons/app-icon.png.
     adaptiveIcon: {
@@ -41,6 +45,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-secure-store",
+    // SQLCipher: the local cache database is encrypted at rest (lib/db-encryption.ts). Needs a native
+    // rebuild; Expo Go can't run it.
+    ["expo-sqlite", { useSQLCipher: true }],
     "expo-font",
     "expo-asset",
     ["expo-image-picker", { "photosPermission": "Choose a photo to use as your AKọ profile image.", "cameraPermission": "Take a photo to use as your AKọ profile image.", "microphonePermission": false }],
