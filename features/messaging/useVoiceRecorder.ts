@@ -5,10 +5,10 @@
 // recording. Owns the expo-audio recorder plus the PanResponder and live
 // waveform state; the screen wires `panHandlers` onto the mic button and
 // reads `phase`/`dragX`/`dragY`/`livePeaks` to render the slide hints and
-// the locked bar.
+// the locked bar. While locked, recording can be paused and resumed.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, PanResponder } from "react-native";
-import { RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
+import { Alert, Animated, AppState, PanResponder } from "react-native";
+import { RecordingPresets, getRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { ensurePermission } from "@/lib/permissions";
 import { downsamplePeaks, normalizeMeterDb } from "./waveform";
@@ -27,6 +27,19 @@ export function useVoiceRecorder(onFinish: (result: VoiceRecorderResult) => void
   const recorderStateRef = useRef(recorderState);
   recorderStateRef.current = recorderState;
 
+  // Whether the OS has already granted the mic. Kept current on mount and on every foreground so the
+  // press handler can decide synchronously: the permission dialogs must never be raised from inside
+  // the touch responder, because the dialog steals the touch and the resulting
+  // onPanResponderTerminate would cancel the recording that had just begun.
+  const micGranted = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => { void getRecordingPermissionsAsync().then(result => { if (alive) micGranted.current = result.granted; }).catch(() => undefined); };
+    refresh();
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") refresh(); });
+    return () => { alive = false; subscription.remove(); };
+  }, []);
+
   const [phase, setPhase] = useState<RecorderPhase>("idle");
   const phaseRef = useRef<RecorderPhase>("idle");
   const setPhaseBoth = (value: RecorderPhase) => { phaseRef.current = value; setPhase(value); };
@@ -34,6 +47,10 @@ export function useVoiceRecorder(onFinish: (result: VoiceRecorderResult) => void
   const dragX = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const resetDrag = () => { dragX.setValue(0); dragY.setValue(0); };
+
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  const setPausedBoth = (value: boolean) => { pausedRef.current = value; setPaused(value); };
 
   const samples = useRef<number[]>([]);
   const [livePeaks, setLivePeaks] = useState<number[]>([]);
@@ -51,10 +68,20 @@ export function useVoiceRecorder(onFinish: (result: VoiceRecorderResult) => void
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recorderState.durationMillis, recorderState.isRecording]);
 
+  // Runs the rationale -> OS prompt -> blocked-Settings flow (lib/permissions.ts) *outside* any gesture.
+  // Nothing records yet: the press that triggered this has already ended, so on success we just tell
+  // the person to hold the mic again.
+  const requestMicPermission = useCallback(async () => {
+    const already = await getRecordingPermissionsAsync().catch(() => null);
+    if (already?.granted) { micGranted.current = true; return; }
+    const granted = await ensurePermission("microphone");
+    micGranted.current = granted;
+    if (granted) Alert.alert("Microphone ready", "Hold the mic button to record a voice note.");
+  }, []);
+
   const startRecording = useCallback(async () => {
     try {
-      const granted = await ensurePermission("microphone");
-      if (!granted) return;
+      setPausedBoth(false);
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       samples.current = [];
       setLivePeaks([]);
@@ -77,6 +104,7 @@ export function useVoiceRecorder(onFinish: (result: VoiceRecorderResult) => void
     await stopAndReset();
     samples.current = [];
     setLivePeaks([]);
+    setPausedBoth(false);
     setPhaseBoth("idle");
   }, [stopAndReset]);
 
@@ -85,9 +113,21 @@ export function useVoiceRecorder(onFinish: (result: VoiceRecorderResult) => void
     const peaks = downsamplePeaks(samples.current);
     await stopAndReset();
     const uri = recorder.uri;
+    setPausedBoth(false);
     setPhaseBoth("idle");
     if (uri) onFinish({ uri, durationSec, peaks });
   }, [recorder, stopAndReset, onFinish]);
+
+  // Locked-bar controls. pause() stops the file and the metering poll (isRecording goes false, so the
+  // effect above stops sampling and the waveform holds still); record() on a paused recorder resumes it.
+  const pauseRecording = useCallback(() => {
+    if (phaseRef.current !== "locked" || pausedRef.current) return;
+    try { recorder.pause(); setPausedBoth(true); } catch { Alert.alert("Couldn't pause recording", "Please try again."); }
+  }, [recorder]);
+  const resumeRecording = useCallback(() => {
+    if (phaseRef.current !== "locked" || !pausedRef.current) return;
+    try { recorder.record(); setPausedBoth(false); } catch { Alert.alert("Couldn't resume recording", "Please try again."); }
+  }, [recorder]);
 
   // Recreated only when the underlying handlers change identity (i.e. almost
   // never, since they're all useCallback-memoized) rather than frozen once
@@ -96,7 +136,10 @@ export function useVoiceRecorder(onFinish: (result: VoiceRecorderResult) => void
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => { void startRecording(); },
+        onPanResponderGrant: () => {
+          if (!micGranted.current) { void requestMicPermission(); return; }
+          void startRecording();
+        },
         onPanResponderMove: (_evt, gesture) => {
           dragX.setValue(Math.min(0, gesture.dx));
           dragY.setValue(Math.min(0, gesture.dy));
@@ -118,7 +161,7 @@ export function useVoiceRecorder(onFinish: (result: VoiceRecorderResult) => void
           resetDrag();
         },
       }),
-    [startRecording, cancelRecording, finishRecording], // eslint-disable-line react-hooks/exhaustive-deps
+    [startRecording, requestMicPermission, cancelRecording, finishRecording], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return {
@@ -128,6 +171,9 @@ export function useVoiceRecorder(onFinish: (result: VoiceRecorderResult) => void
     dragY,
     livePeaks,
     durationMillis: recorderState.durationMillis,
+    paused,
+    pauseRecording,
+    resumeRecording,
     cancelRecording,
     finishRecording,
   };

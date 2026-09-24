@@ -10,6 +10,8 @@ import { EmptyState, ErrorState, OfflineState } from "@/components/feedback";
 import { getScreenState } from "@/lib/screenState";
 import { FeedSkeleton } from "@/components/feed/FeedSkeleton";
 import { PostCard } from "@/components/feed/PostCard";
+import { PendingPostCard } from "@/components/feed/PendingPostCard";
+import { useOutboxPosts } from "@/features/feed/useOutboxPosts";
 import { FeedSwipeGestureContext } from "@/components/feed/FeedSwipeGesture";
 import { useFeedChrome } from "@/components/navigation/FeedChrome";
 import { useFeed, useTopicFeed } from "@/features/feed/api";
@@ -32,6 +34,8 @@ type Props = { index: number; onIndexChange: (index: number) => void; interestId
 
 const FeedPane = memo(function FeedPane({ mode, interestId, nativeGesture }: { mode: FeedMode; interestId?: string; nativeGesture: ReturnType<typeof Gesture.Native> }) {
   const rankedFeed = useFeed(mode, !(mode === "ranked" && !!interestId)); const topicFeed = useTopicFeed(mode === "ranked" ? interestId : undefined); const feed = mode === "ranked" && interestId ? topicFeed : rankedFeed; const { colors } = useTheme(); const { scrollHandler } = useFeedChrome(); const insets = useSafeAreaInsets(); const router = useRouter();
+  // Queued posts (offline / sending / gave up) show as placeholders on top of the personal feeds, not on "top" or a topic filter, which they wouldn't appear in.
+  const queued = useOutboxPosts(); const pending = mode !== "top" && !interestId ? queued : [];
   const posts = feed.data?.pages.flat() ?? []; const render = useCallback(({ item }: { item: Post }) => <PostCard post={item} />, []);
   // Every time a new page lands (initial load, or another page from
   // onEndReached), warm expo-image's disk cache for the avatars and lead
@@ -44,15 +48,15 @@ const FeedPane = memo(function FeedPane({ mode, interestId, nativeGesture }: { m
     prefetchImages(lastPage.flatMap(post => [post.author.avatar_url, post.posted_as_page?.avatar_url ?? null, post.media_urls[0] ?? null]));
   }, [feed.data, pageCount]);
   const empty = mode === "following" ? "No posts from people you follow yet. Follow a few people to see their posts here." : mode === "top" ? "Nothing's picked up much discussion in the last week yet." : "No posts yet. Be the first to share a thought.";
-  if (getScreenState(feed) === "offline" && !posts.length) return <OfflineState onRetry={() => void feed.refetch()} />;
+  if (getScreenState(feed) === "offline" && !posts.length && !pending.length) return <OfflineState onRetry={() => void feed.refetch()} />;
   if (feed.isLoading && !posts.length) return <FeedSkeleton />;
-  if (feed.isError && !posts.length) return <ErrorState message="Couldn't load your feed." onRetry={() => void feed.refetch()} />;
+  if (feed.isError && !posts.length && !pending.length) return <ErrorState message="Couldn't load your feed." onRetry={() => void feed.refetch()} />;
   // Wrapping the list's own native scroll/RefreshControl gesture and declaring
   // it simultaneous with the pager's outer Pan (below) means the two no longer
   // race for the first touch — the pull-to-refresh gesture used to lose that
   // race intermittently because the outer Pan's GestureDetector could claim the
   // touch before RefreshControl got a chance to recognize a downward drag.
-  return <GestureDetector gesture={nativeGesture}><Animated.FlatList data={posts} renderItem={render} keyExtractor={item => item.id} contentContainerStyle={[s.list, { paddingTop: insets.top + 129, paddingBottom: insets.bottom + 100 }]} ListHeaderComponent={mode === "ranked" && interestId ? <Text color="accent" onPress={() => router.replace("/(tabs)/home")} style={[s.topicChip, { backgroundColor: colors.accentSoft }]}>Filtered by topic  <Icon name="x" size={14} color={colors.accent} /></Text> : null} ItemSeparatorComponent={Separator} onScroll={scrollHandler} scrollEventThrottle={16} refreshControl={<RefreshControl refreshing={feed.isRefetching && !feed.isFetchingNextPage} onRefresh={() => void feed.refetch()} tintColor={colors.accent} />} onEndReached={() => { if (feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage(); }} onEndReachedThreshold={.5} ListEmptyComponent={<EmptyState icon="file-text" title="Nothing here yet" message={empty} />} ListFooterComponent={feed.isFetchingNextPage ? <ActivityIndicator color={colors.accent} style={s.loading} /> : <View style={s.footer} />} initialNumToRender={5} maxToRenderPerBatch={6} windowSize={7} /></GestureDetector>;
+  return <GestureDetector gesture={nativeGesture}><Animated.FlatList data={posts} renderItem={render} keyExtractor={item => item.id} contentContainerStyle={[s.list, { paddingTop: insets.top + 129, paddingBottom: insets.bottom + 100 }]} ListHeaderComponent={<>{mode === "ranked" && interestId ? <Text color="accent" onPress={() => router.replace("/(tabs)/home")} style={[s.topicChip, { backgroundColor: colors.accentSoft }]}>Filtered by topic  <Icon name="x" size={14} color={colors.accent} /></Text> : null}{pending.map(item => <View key={item.localId} style={s.pending}><PendingPostCard post={item} /></View>)}</>} ItemSeparatorComponent={Separator} onScroll={scrollHandler} scrollEventThrottle={16} refreshControl={<RefreshControl refreshing={feed.isRefetching && !feed.isFetchingNextPage} onRefresh={() => void feed.refetch()} tintColor={colors.accent} />} onEndReached={() => { if (feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage(); }} onEndReachedThreshold={.5} ListEmptyComponent={pending.length ? null : <EmptyState icon="file-text" title="Nothing here yet" message={empty} />} ListFooterComponent={feed.isFetchingNextPage ? <ActivityIndicator color={colors.accent} style={s.loading} /> : <View style={s.footer} />} initialNumToRender={5} maxToRenderPerBatch={6} windowSize={7} /></GestureDetector>;
 });
 const Separator = () => <View style={s.separator} />;
 
@@ -89,4 +93,4 @@ export function FeedPager({ index, onIndexChange, interestId, progress }: Props)
   return <FeedSwipeGestureContext.Provider value={pan}><GestureDetector gesture={composed}><Animated.View style={[s.track, { width: width * 3 }, trackStyle]}>{MODES.map((mode, pane) => <View key={mode} style={{ width }}>{visited.has(pane) || pane === index ? <FeedPane mode={mode} interestId={mode === "ranked" ? interestId : undefined} nativeGesture={nativeGestures[mode]} /> : <View style={{ flex: 1 }} />}</View>)}</Animated.View></GestureDetector></FeedSwipeGestureContext.Provider>;
 }
 
-const s = StyleSheet.create({ track: { flex: 1, flexDirection: "row" }, list: { paddingHorizontal: 20, flexGrow: 1 }, topicChip: { alignSelf: "flex-start", overflow: "hidden", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, marginBottom: 16, fontSize: 14 }, separator: { height: 16 }, loading: { margin: 20 }, footer: { height: 12 } });
+const s = StyleSheet.create({ track: { flex: 1, flexDirection: "row" }, list: { paddingHorizontal: 20, flexGrow: 1 }, topicChip: { alignSelf: "flex-start", overflow: "hidden", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, marginBottom: 16, fontSize: 14 }, separator: { height: 16 }, pending: { marginBottom: 16 }, loading: { margin: 20 }, footer: { height: 12 } });
