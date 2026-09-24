@@ -10,7 +10,7 @@ import { cacheMessages } from "./local-cache";
 import type { Message } from "@/features/messaging/api";
 
 export type OutboxKind = "text";
-type OutboxPayload = { content: string; senderId: string };
+type OutboxPayload = { content: string; senderId: string; replyToMessageId?: string | null };
 type OutboxRow = { local_id: string; kind: OutboxKind; conversation_id: string; payload: string; created_at: string; attempts: number };
 
 let flushing = false;
@@ -43,7 +43,7 @@ export async function flushOutbox(): Promise<void> {
       try {
         const { data, error } = await supabase
           .from("messages")
-          .insert({ conversation_id: row.conversation_id, sender_id: payload.senderId, content: payload.content, delivered_at: new Date().toISOString() })
+          .insert({ conversation_id: row.conversation_id, sender_id: payload.senderId, content: payload.content, delivered_at: new Date().toISOString(), reply_to_message_id: payload.replyToMessageId ?? null })
           .select("id, conversation_id, sender_id, content, created_at, delivered_at, read_at, reply_to_message_id, is_deleted")
           .single();
         if (error) throw error;
