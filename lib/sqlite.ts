@@ -7,11 +7,16 @@
 //    bucket voice notes), so replaying/rescrolling a bubble doesn't re-request one every time
 //  - outbox: writes composed while offline, retried once the network returns. Started out
 //    chat-messages-only (kind='text', conversation_id required); v4 widened it to also queue
-//    post creation (kind='post', conversation_id null) — see lib/outbox.ts.
+//    post creation (kind='post', conversation_id null); v5 scopes rows per user (user_id) and
+//    adds retry bookkeeping (status, next_attempt_at) — see lib/outbox.ts.
+//
+// Everything here except `outbox` is a cache of one user's server data and is wiped whenever the
+// signed-in user changes (resetLocalData, driven by lib/local-data.ts). `outbox` is user-scoped
+// instead, so unsent items survive a sign-out and only ever flush for the account that made them.
 import * as SQLite from "expo-sqlite";
 
 const DB_NAME = "ako-cache.db";
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -70,7 +75,10 @@ async function openDb(): Promise<SQLite.SQLiteDatabase> {
         payload TEXT NOT NULL,
         created_at TEXT NOT NULL,
         attempts INTEGER NOT NULL DEFAULT 0,
-        last_error TEXT
+        last_error TEXT,
+        user_id TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        next_attempt_at INTEGER NOT NULL DEFAULT 0
       );
     `);
 
@@ -101,6 +109,23 @@ async function openDb(): Promise<SQLite.SQLiteDatabase> {
       }
     }
 
+    // v5: per-user outbox + retry bookkeeping. Fresh installs already got these columns from the
+    // CREATE TABLE above; upgraders add them in place. Text/voice rows are attributed from the
+    // sender id stored in their payload. Post rows carry no owner, so there is no safe account to
+    // flush them as (sending one as whoever signs in next would be worse than losing it) — drop them.
+    if (currentVersion > 0 && currentVersion < 5) {
+      const cols = await db.getAllAsync<{ name: string }>("PRAGMA table_info(outbox);");
+      const has = (name: string) => cols.some((col) => col.name === name);
+      if (!has("user_id")) await db.execAsync("ALTER TABLE outbox ADD COLUMN user_id TEXT;");
+      if (!has("status")) await db.execAsync("ALTER TABLE outbox ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';");
+      if (!has("next_attempt_at")) await db.execAsync("ALTER TABLE outbox ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0;");
+      await db.execAsync(`
+        UPDATE outbox SET user_id = json_extract(payload, '$.senderId') WHERE user_id IS NULL AND kind IN ('text', 'voice');
+        DELETE FROM outbox WHERE user_id IS NULL;
+      `);
+    }
+    await db.execAsync("CREATE INDEX IF NOT EXISTS idx_outbox_user_status ON outbox (user_id, status, created_at);");
+
     await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
   }
   return db;
@@ -122,4 +147,24 @@ export async function safeDb<T>(fn: (db: SQLite.SQLiteDatabase) => Promise<T>): 
     if (__DEV__) console.warn("[sqlite]", error);
     return undefined;
   }
+}
+
+// Caches that hold one user's server data. `outbox` is deliberately absent (it is user-scoped and
+// must survive sign-out), and so is anything that isn't personal. Add new per-user cache tables
+// here (e.g. an audio cache) so they are wiped together.
+const USER_CACHE_TABLES = ["messages_cache", "profiles_cache", "signed_urls_cache", "kv_cache"] as const;
+
+/**
+ * Deletes every per-user cache row, including the persisted react-query copy (kv_cache) and the
+ * cache-owner marker. Returns whether the wipe actually committed, so callers can retry rather
+ * than assume. Callers should clear the in-memory query client themselves.
+ */
+export async function resetLocalData(): Promise<boolean> {
+  const ok = await safeDb(async (db) => {
+    await db.withTransactionAsync(async () => {
+      for (const table of USER_CACHE_TABLES) await db.runAsync(`DELETE FROM ${table};`);
+    });
+    return true;
+  });
+  return ok === true;
 }
