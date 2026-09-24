@@ -84,13 +84,17 @@ function promptBlocked(handler: Handler): void {
  * if the OS reports the permission as blocked. Returns whether the
  * permission ended up granted; never throws.
  */
-export async function ensurePermission(kind: PermissionKind): Promise<boolean> {
+export async function ensurePermission(kind: PermissionKind, options: { promptSettingsIfBlocked?: boolean } = {}): Promise<boolean> {
+  // `promptSettingsIfBlocked: false` is for asks the app makes on its own initiative (the first-run
+  // notifications primer): a "no" there should stay a quiet "no" instead of being followed by a
+  // "go to Settings" alert the moment the person declines. Asks they made themselves keep the default.
+  const { promptSettingsIfBlocked = true } = options;
   const handler = handlers[kind];
   const current = await handler.get();
   if (current.granted) return true;
 
   if (!current.canAskAgain) {
-    promptBlocked(handler);
+    if (promptSettingsIfBlocked) promptBlocked(handler);
     return false;
   }
 
@@ -98,6 +102,6 @@ export async function ensurePermission(kind: PermissionKind): Promise<boolean> {
   if (!proceed) return false;
 
   const result = await handler.request();
-  if (!result.granted && !result.canAskAgain) promptBlocked(handler);
+  if (!result.granted && !result.canAskAgain && promptSettingsIfBlocked) promptBlocked(handler);
   return result.granted;
 }

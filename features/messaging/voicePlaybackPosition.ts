@@ -48,3 +48,11 @@ export function saveVoicePlaybackPosition(messageId: string, seconds: number) {
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
   });
 }
+
+// Used when the on-device caches are wiped for a different account: message ids are private to the
+// account that heard them, and the persisted map would otherwise outlive the sign-out.
+export async function clearVoicePlaybackPositions() {
+  cache = {};
+  loading = null;
+  await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+}

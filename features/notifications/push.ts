@@ -40,7 +40,10 @@ function markPrompted() {
 // Notification requests already routed, so one tap can never navigate twice.
 const handledResponses = new Set<string>();
 
-async function registerToken(userId: string) {
+// conversationId comes from the push payload; only route to it if it has the shape of a real id.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function registerToken(userId: string, allowPrompt: boolean) {
   if (Platform.OS === "web") return; // push_tokens.platform is constrained to ios/android; no push support on web anyway
   if (await isNotificationsOptedOut()) return; // explicit "off" from Settings (features/notifications/settings.ts) — don't silently re-register
   try {
@@ -54,10 +57,11 @@ async function registerToken(userId: string) {
     if (!granted) {
       // Ask (with our own rationale first, via ensurePermission) only while the OS will still show a
       // prompt and only once per install; a denied/blocked state is left alone rather than re-nagging
-      // on every foreground.
-      if (current.canAskAgain && !PROMPTED_MARKER.exists) {
+      // on every foreground. `allowPrompt` is false until onboarding is done, so the primer never
+      // interrupts sign-up, and a "no" here doesn't chase the person with a Settings alert.
+      if (allowPrompt && current.canAskAgain && !PROMPTED_MARKER.exists) {
         markPrompted();
-        granted = await ensurePermission("notifications");
+        granted = await ensurePermission("notifications", { promptSettingsIfBlocked: false });
       }
     }
     if (!granted) return;
@@ -76,15 +80,15 @@ async function registerToken(userId: string) {
 
 /** Registers (or re-registers) this device's push token whenever a user is signed in, and on every foreground — cheap no-op if the token and row are already current, but catches the token Expo occasionally rotates. Mount once, near the root, inside AuthProvider. */
 export function usePushRegistration() {
-  const { user } = useAuth();
+  const { user, onboardingComplete } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!user) return;
-    void registerToken(user.id);
-    const sub = AppState.addEventListener("change", (state) => { if (state === "active") void registerToken(user.id); });
+    void registerToken(user.id, onboardingComplete);
+    const sub = AppState.addEventListener("change", (state) => { if (state === "active") void registerToken(user.id, onboardingComplete); });
     return () => sub.remove();
-  }, [user?.id]);
+  }, [user?.id, onboardingComplete]);
 
   // Cold start: the live listener below only sees taps while the process is alive, so a notification
   // that *launched* the app from closed is read back once, after sign-in (navigating earlier would race
@@ -115,7 +119,7 @@ function openConversationFromResponse(router: ReturnType<typeof useRouter>, resp
   const id = response.notification.request.identifier;
   if (handledResponses.has(id)) return false;
   const data = response.notification.request.content.data as { conversationId?: string } | undefined;
-  if (!data?.conversationId) return false;
+  if (typeof data?.conversationId !== "string" || !UUID_PATTERN.test(data.conversationId)) return false;
   handledResponses.add(id);
   router.push({ pathname: "/messages/[conversationId]", params: { conversationId: data.conversationId } });
   return true;
