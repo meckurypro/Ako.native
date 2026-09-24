@@ -2,7 +2,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { Icon } from "@/components/core/Icon";
-import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
+import { RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
+import { ensurePermission } from "@/lib/permissions";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar, Text } from "@/components/core";
@@ -43,7 +44,7 @@ export default function MessageThreadScreen() {
   useEffect(() => { if (!query) setTimeout(() => list.current?.scrollToEnd({ animated: false }), 50); }, [messages.data?.length, query]);
   const submit = () => { if (!draft.trim() || send.isPending) return; const message = draft; setDraft(""); setShowEmoji(false); send.mutate(message, { onError: () => { setDraft(message); Alert.alert("Couldn't send message", "Please try again."); } }); };
   const renderMessage = useCallback(({ item }: { item: Message }) => <Bubble item={item} own={item.sender_id === user?.id} accent={colors.accent} />, [colors.accent, user?.id]);
-  const beginRecording=async()=>{try{const permission=await requestRecordingPermissionsAsync();if(!permission.granted){Alert.alert("Microphone permission needed","Allow microphone access to record a voice note.");return;}await setAudioModeAsync({playsInSilentMode:true,allowsRecording:true});await recorder.prepareToRecordAsync();recorder.record();}catch{Alert.alert("Couldn't start recording","Please try again.");}};
+  const beginRecording=async()=>{try{const granted=await ensurePermission("microphone");if(!granted)return;await setAudioModeAsync({playsInSilentMode:true,allowsRecording:true});await recorder.prepareToRecordAsync();recorder.record();}catch{Alert.alert("Couldn't start recording","Please try again.");}};
   const stopRecording=async()=>{try{await recorder.stop();const uri=recorder.uri;if(uri)setVoicePreview({uri,durationSec:Math.max(1,recorderState.durationMillis/1000),viewOnce:false});}catch{Alert.alert("Couldn't finish recording","Please try again.");}finally{void setAudioModeAsync({allowsRecording:false});}};
   const sendPreview=()=>{if(!voicePreview||sendVoice.isPending)return;const preview=voicePreview;setVoicePreview(null);sendVoice.mutate(preview,{onError:()=>{setVoicePreview(preview);Alert.alert("Couldn't send voice message","Please try again.");}});};
   const openProfile = () => { if (person?.username) router.push({ pathname: "/profiles/[username]", params: { username: person.username } }); };

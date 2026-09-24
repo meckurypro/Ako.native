@@ -14,3 +14,4 @@ export * from "./Text";
 export * from "./VerifiedBadge";
 export * from "./BrandGlyphs";
 export * from "./Icon";
+export * from "./OfflineBanner";

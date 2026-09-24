@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/core/Icon";
 import * as ImagePicker from "expo-image-picker";
+import { ensurePermission } from "@/lib/permissions";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Avatar, Text } from "@/components/core";
@@ -95,6 +96,8 @@ function ComposeScreen() {
 
   const pick = async () => {
     if (media.length >= MAX_MEDIA) return;
+    const granted = await ensurePermission("mediaLibrary");
+    if (!granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
