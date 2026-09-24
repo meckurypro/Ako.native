@@ -74,7 +74,7 @@ export function VoiceRecordingLockedBar({ peaks, durationMillis, onCancel, onSen
 
 const waveStyles = StyleSheet.create({ row: { flex: 1, flexDirection: "row", alignItems: "center", gap: 2, height: 26, overflow: "hidden" }, bar: { width: 2, borderRadius: 2 } });
 const held = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFillObject, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  root: { ...StyleSheet.absoluteFill, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 14, borderTopWidth: StyleSheet.hairlineWidth },
   dot: { width: 9, height: 9, borderRadius: 5 },
   timer: { fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
   cancelHint: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, paddingRight: 46 },

@@ -12,3 +12,6 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   { key: "objects", label: "Objects", emojis: ["📱","💻","⌚","📷","🔦","💡","🔋","💰","💵","💳","📦","📌","📍","🔒","🔑","🔨","⚙️","🧵","💊","🎓","📚","✏️","📝"] },
   { key: "symbols", label: "Symbols", emojis: ["✅","❌","❓","❗","‼️","💯","🔥","✨","⚡","💥","💫","💤","🔴","🟢","🔵","⚠️","🚫","♻️","🆗","🆕"] },
 ];
+
+// The 12 emojis on the quick-react strip until the user has their own most-used ones.
+export const DEFAULT_TOP_EMOJIS: string[] = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "👏", "😍", "😅", "🤝"];
