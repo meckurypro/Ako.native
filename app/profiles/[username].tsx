@@ -6,12 +6,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
-import { Avatar, FacebookGlyph, MediaViewer, Text, VerifiedBadge, WhatsAppGlyph, XGlyph } from "@/components/core";
+import { Avatar, Button, FacebookGlyph, MediaViewer, Text, VerifiedBadge, WhatsAppGlyph, XGlyph } from "@/components/core";
 import { ConfirmDialog, ErrorState, OfflineState, Skeleton } from "@/components/feedback";
 import { getScreenState } from "@/lib/screenState";
 import { PostCard } from "@/components/feed/PostCard";
 import { TierBadge } from "@/components/profile/TierBadge";
-import { type Person, type ProfileMedia, useFollowState, useIdentityPosts, useProfile, useProfileMedia, useToggleFollow } from "@/features/discovery/api";
+import { type Person, type ProfileMedia, useCachedProfile, useFollowState, useIdentityPosts, useProfile, useProfileMedia, useToggleFollow } from "@/features/discovery/api";
 import {
   type ReportReason,
   useContactNickname,
@@ -62,6 +62,7 @@ export default function PublicProfileScreen() {
 
   const profile = useProfile(name);
   const person = profile.data;
+  const cachedProfile = useCachedProfile(name, getScreenState(profile) === "offline");
   const state = useFollowState(person?.id ?? "");
   const toggle = useToggleFollow(person ?? ({ id: "", username: "", is_private: false } as Person));
   const own = person?.id === user?.id;
@@ -101,7 +102,7 @@ export default function PublicProfileScreen() {
     },
   });
 
-  if (getScreenState(profile) === "offline") return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><OfflineState onRetry={() => void profile.refetch()} /></SafeAreaView>;
+  if (getScreenState(profile) === "offline") return <OfflineProfile cached={cachedProfile.data ?? null} onRetry={() => void profile.refetch()} />;
   if (profile.isLoading) return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><View style={s.loading}><Skeleton height={220} /><Skeleton height={360} /></View></SafeAreaView>;
   if (profile.isError || !person) return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><ErrorState message="Profile unavailable." onRetry={() => void profile.refetch()} /></SafeAreaView>;
 
@@ -689,3 +690,15 @@ const s = StyleSheet.create({
   navItem: { flex: 1, alignItems: "center", gap: 5 },
   navLabel: { fontSize: 11, lineHeight: 14, fontWeight: "500" },
 });
+
+// Stand-in for a profile that isn't cached and can't be fetched offline. The name and avatar are
+// whatever profiles_cache last saw for this username (a chat, or an earlier visit); the rest
+// (counts, bio, posts) genuinely needs the network, so this says so instead of guessing.
+function OfflineProfile({ cached, onRetry }: { cached: { username: string; display_name: string; avatar_url: string | null } | null; onRetry: () => void }) {
+  const router = useRouter(); const { colors } = useTheme();
+  return <SafeAreaView style={[s.root, { backgroundColor: colors.background, paddingHorizontal: 16 }]}>
+    <View style={{ alignItems: "flex-start" }}><Button label="Back" variant="ghost" onPress={() => router.back()} /></View>
+    {cached ? <View style={{ alignItems: "center", gap: 6, paddingTop: 20 }}><Avatar uri={cached.avatar_url} name={cached.display_name} size={88} /><Text variant="title">{cached.display_name}</Text><Text color="muted">@{cached.username}</Text></View> : null}
+    <OfflineState message="This profile isn’t saved on your device yet. It will load when you’re back online." onRetry={onRetry} />
+  </SafeAreaView>;
+}

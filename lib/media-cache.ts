@@ -1,5 +1,6 @@
 // File: lib/media-cache.ts
 import { Image } from "expo-image";
+import { setVideoCacheSizeAsync } from "expo-video";
 import { supabase } from "./supabase";
 import { cacheSignedUrl, getCachedSignedUrl } from "./local-cache";
 
@@ -49,7 +50,22 @@ export async function getSignedAudioUrl(path: string): Promise<string | null> {
  * an error for.
  */
 export function prefetchImages(urls: readonly (string | null | undefined)[]): void {
-  const unique = Array.from(new Set(urls.filter((url): url is string => !!url)));
+  // Callers pass a post's lead media (`media_urls[0]`), which is a video for video posts — and
+  // Image.prefetch would download the whole file trying to treat it as a picture. Videos are
+  // cached by the player instead (see useCaching in PostMedia / MediaViewer).
+  const unique = Array.from(new Set(urls.filter((url): url is string => !!url && !isVideoUrl(url))));
   if (!unique.length) return;
   void Image.prefetch(unique, { cachePolicy: "disk" }).catch(() => {});
+}
+
+const VIDEO_URL = /\.(mp4|mov|m4v|webm)(\?|$)/i;
+export const isVideoUrl = (url: string) => VIDEO_URL.test(url);
+
+// expo-video's disk cache defaults to 1 GB, which is a lot to hand a feed app on a shared phone.
+// Post videos are opted in per source with `useCaching`; this caps how much of it they can take.
+// The cache is evicted least-recently-used, and per expo-video the size can only be set while no
+// player exists, so this runs at module load (AppProviders), before any screen mounts one.
+const VIDEO_CACHE_BYTES = 300 * 1024 * 1024;
+export function configureVideoCache(): void {
+  void setVideoCacheSizeAsync(VIDEO_CACHE_BYTES).catch(() => {});
 }

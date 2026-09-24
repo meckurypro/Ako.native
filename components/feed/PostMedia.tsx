@@ -14,7 +14,8 @@ const COMMIT_VELOCITY = 500;
 const EDGE_RESISTANCE = 2.5;
 
 function Video({ uri, width, height, controls = false }: { uri: string; width: number; height: number; controls?: boolean }) {
-  const player = useVideoPlayer(uri);
+  // useCaching: a video you've watched replays from disk (and plays offline) instead of re-downloading.
+  const player = useVideoPlayer({ uri, useCaching: true });
   return <VideoView player={player} style={{ width, height, backgroundColor: "#111" }} nativeControls={controls} contentFit={controls ? "contain" : "cover"} />;
 }
 
