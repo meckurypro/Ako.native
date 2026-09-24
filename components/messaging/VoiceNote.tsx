@@ -5,6 +5,8 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Text } from "@/components/core";
 import { formatVoiceDuration } from "@/features/messaging/api";
 import { getSignedAudioUrl } from "@/lib/media-cache";
+import { cacheAudioFromUrl, getCachedAudioUri } from "@/lib/audio-cache";
+import { useNetworkStatus } from "@/lib/network";
 import { getVoicePlaybackPosition, saveVoicePlaybackPosition } from "@/features/messaging/voicePlaybackPosition";
 import { useTheme } from "@/providers/ThemeProvider";
 
@@ -24,9 +26,17 @@ type Props = { id: string; path: string; durationSec: number; peaks?: number[]; 
 // of view, or replaying it, doesn't re-request a signed URL from Supabase
 // every time — only the first play (or once the cached URL is near its 1hr
 // expiry) actually hits the network.
+//
+// The audio itself is cached too (lib/audio-cache.ts): the first play streams
+// from the signed URL while the file downloads in the background, and every
+// later mount plays the local copy — instant, no signing, works offline.
+// View-once notes are never cached: keeping the bytes would defeat the point.
 export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce, openedOnce, onOpenedOnce }: Props) {
   const { colors } = useTheme();
-  const [url, setUrl] = useState<string | null>(null);
+  const [resolvedUrl, setUrl] = useState<string | null>(null);
+  // A voice note still waiting in the offline outbox has a local file path instead of a storage path — play it as-is.
+  const isLocalFile = path.startsWith("file:");
+  const url = isLocalFile ? path : resolvedUrl;
   const [failed, setFailed] = useState(false);
   const player = useAudioPlayer(url, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
@@ -43,18 +53,26 @@ export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce, openedO
   const restoredRef = useRef(false);
   const latestStatus = useRef({ currentTime: 0, duration: 0 });
   const bars = peaks?.length ? peaks : fallbackPeaks();
+  const { isOffline } = useNetworkStatus();
+  const cacheable = !viewOnce;
 
   useEffect(() => {
-    if (spent) return; // already consumed (possibly from a prior session) — no need to sign a URL that will never play
+    if (spent || isLocalFile) return; // already consumed (possibly from a prior session) — no need to sign a URL that will never play
     let alive = true;
-    // A voice note still waiting in the offline outbox has a local file path instead of a storage path.
-    (path.startsWith("file:") ? Promise.resolve(path) : getSignedAudioUrl(path)).then(signedUrl => {
+    void (async () => {
+      // Already on this device: play that, without signing a URL or touching the network.
+      if (cacheable) {
+        const local = await getCachedAudioUri(path);
+        if (!alive) return;
+        if (local) { setUrl(local); return; }
+      }
+      const signedUrl = await getSignedAudioUrl(path);
       if (!alive) return;
       if (!signedUrl) { setFailed(true); return; }
       setUrl(signedUrl);
-    });
+    })();
     return () => { alive = false; };
-  }, [path, spent]);
+  }, [path, spent, isLocalFile, cacheable]);
 
   useEffect(() => { if (viewOnce && !own && status.didJustFinish && !spent) { setJustFinished(true); onOpenedOnce?.(); } }, [own, status.didJustFinish, viewOnce, spent, onOpenedOnce]);
 
@@ -96,7 +114,9 @@ export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce, openedO
     if (!url) return;
     if (status.playing) { player.pause(); return; }
     const finished = status.didJustFinish || (status.duration > 0 && status.currentTime >= status.duration - .05);
-    try { if (finished) await player.seekTo(0); player.play(); } catch { setFailed(true); }
+    try { if (finished) await player.seekTo(0); player.play(); } catch { setFailed(true); return; }
+    // Streaming from a signed URL: keep a copy for next time (a no-op if it's already cached).
+    if (cacheable && url.startsWith("http")) void cacheAudioFromUrl(path, url);
   };
 
   const cycleSpeed = () => {
@@ -120,7 +140,7 @@ export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce, openedO
         {viewOnce && <View style={[s.once, { backgroundColor: own ? "rgba(255,255,255,.2)" : colors.accentSoft }]}><Text style={[s.onceText, { color: own ? "#fff" : colors.accent }]}>1</Text></View>}
         <Pressable onPress={cycleSpeed} style={[s.speed, { backgroundColor: own ? "rgba(255,255,255,.18)" : colors.surfaceElevated }]}><Text style={[s.speedText, { color: own ? "#fff" : colors.textMuted }]}>{SPEEDS[speedIndex]}x</Text></Pressable>
         <Text style={[s.duration, { color: own ? "rgba(255,255,255,.82)" : colors.textMuted }]}>{formatVoiceDuration(status.playing || status.currentTime > 0 ? status.currentTime : durationSec)}</Text>
-        {failed && <Text color="muted" style={s.fail}>Unavailable</Text>}
+        {failed && <Text color="muted" style={s.fail}>{isOffline ? "Offline" : "Unavailable"}</Text>}
       </View>
     </View>
   );

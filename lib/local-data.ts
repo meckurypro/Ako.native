@@ -6,6 +6,7 @@
 // data can land in it. Driven from AuthProvider so no call site needs to remember to do it.
 import { Image } from "expo-image";
 import { clearVideoCacheAsync } from "expo-video";
+import { clearAudioCache } from "./audio-cache";
 import { clearVoicePlaybackPositions } from "@/features/messaging/voicePlaybackPosition";
 import { resetLocalData, safeDb } from "./sqlite";
 
@@ -48,7 +49,7 @@ export function reconcileLocalDataOwner(userId: string | null, options: { treatU
       // The SQLite caches are only part of what's on disk for the previous account: remembered
       // voice-note positions and expo-image's cached avatars/media go with them. Best-effort.
       // clearVideoCacheAsync refuses while a video player is alive; a failure is swallowed like the rest.
-      await Promise.allSettled([clearVoicePlaybackPositions(), Image.clearDiskCache(), Image.clearMemoryCache(), clearVideoCacheAsync()]);
+      await Promise.allSettled([clearVoicePlaybackPositions(), Image.clearDiskCache(), Image.clearMemoryCache(), clearVideoCacheAsync(), clearAudioCache()]);
     }
     if (userId && (wiped || owner !== userId)) await writeOwner(userId);
     return wiped;

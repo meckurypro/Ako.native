@@ -9,6 +9,7 @@ import { createSQLitePersister } from "@/lib/query-persister";
 import { NetworkProvider, onNetworkReconnect } from "@/lib/network";
 import { flushOutbox } from "@/lib/outbox";
 import { pruneStaleProfiles } from "@/lib/local-cache";
+import { sweepAudioCache } from "@/lib/audio-cache";
 import { configureVideoCache } from "@/lib/media-cache";
 import { primeVoicePlaybackPositions } from "@/features/messaging/voicePlaybackPosition";
 import { usePushRegistration } from "@/features/notifications/push";
@@ -22,6 +23,9 @@ primeVoicePlaybackPositions();
 
 // Cached profile rows older than a week are dead weight (and stale avatars); drop them once per launch.
 void pruneStaleProfiles();
+
+// Remove voice-note audio files the cache index doesn't know about (interrupted wipe or download).
+void sweepAudioCache();
 
 // Cap expo-video's disk cache (used for post videos). Must run before any video player exists.
 configureVideoCache();
