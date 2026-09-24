@@ -4,6 +4,7 @@ import * as Linking from "expo-linking";
 import { AppState } from "react-native";
 import { queryClient } from "@/lib/query-client";
 import { reconcileLocalDataOwner } from "@/lib/local-data";
+import { unregisterPushToken } from "@/features/notifications/pushToken";
 import { supabase } from "@/lib/supabase";
 
 export type AuthProfile = { username: string; display_name: string; bio: string | null; avatar_url: string | null; onboarding_completed: boolean };
@@ -141,6 +142,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signOut = useCallback(async () => {
     manualSignOut.current = true;
+    // While the session is still valid: hand this device's push token back so the next account on it
+    // can register cleanly (and this one stops receiving pushes it can no longer open).
+    await unregisterPushToken();
     const { error } = await supabase.auth.signOut();
     supabase.auth.stopAutoRefresh();
     setIsRecovery(false);

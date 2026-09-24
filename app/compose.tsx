@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -20,6 +20,7 @@ import { HeadingColorPicker } from "@/components/compose/HeadingColorPicker";
 import { useCategories } from "@/features/onboarding/api";
 import { useActiveIdentity, useCreatePost, useUploadPostMedia } from "@/features/compose/api";
 import { isCurrentlyOffline } from "@/lib/network";
+import { makeUuid } from "@/lib/uuid";
 import { enqueueOutboxPost, makeLocalPostId } from "@/lib/outbox";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -57,6 +58,9 @@ function ComposeScreen() {
   const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
   const [media, setMedia] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // One idempotency key per publish attempt, reused if the request fails or times out and the user
+  // taps Post again (the first one may have landed), and only replaced once a post is really created.
+  const requestKey = useRef<string | null>(null);
 
   const postingAsPage = identity.data?.mode === "page" ? identity.data.page : null;
   const displayName = postingAsPage?.name ?? profile?.display_name ?? "You";
@@ -67,7 +71,9 @@ function ComposeScreen() {
   const submit = async (status?: "draft") => {
     if (!canSubmit) return;
     setError(null);
+    requestKey.current ??= makeUuid();
     const body = {
+      client_request_id: requestKey.current,
       heading: heading.trim() || undefined,
       heading_color: headingColor,
       content,
@@ -83,6 +89,7 @@ function ComposeScreen() {
     // the outbox flushes on reconnect.
     if (await isCurrentlyOffline()) {
       await enqueueOutboxPost(makeLocalPostId(), body);
+      requestKey.current = null;
       Alert.alert("You're offline", "This post will publish automatically once you're back online.");
       router.replace("/(tabs)/home");
       return;
@@ -90,6 +97,7 @@ function ComposeScreen() {
 
     try {
       const post = await create.mutateAsync(body);
+      requestKey.current = null;
       if (status) Alert.alert("Draft saved", "Your post is available in your drafts.");
       router.replace(status ? "/(tabs)/home" : { pathname: "/posts/[postId]", params: { postId: post.id } });
     } catch (err) {

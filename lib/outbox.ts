@@ -33,7 +33,11 @@ type OutboxMessagePayload = { content: string; senderId: string; replyToMessageI
 // create-post/create-page-post Edge Functions — replaying a queued post goes
 // through the same functions, not a raw table insert, so it gets the same
 // validation, moderation, and post_topics/interest linking a normal post does.
-export type OutboxPostPayload = { heading?: string; heading_color?: string | null; content: string; interest_ids: string[]; media_urls: string[]; status?: "draft" | "scheduled"; scheduled_for?: string; posted_as_page_id?: string };
+export type OutboxPostPayload = { heading?: string; heading_color?: string | null; content: string; interest_ids: string[]; media_urls: string[]; status?: "draft" | "scheduled"; scheduled_for?: string; posted_as_page_id?: string;
+  // Idempotency key. Sent on every attempt; create-post / create-page-post return the existing post for a
+  // repeat of the same (user, key) instead of publishing again. Generated at enqueue, or on first flush for
+  // rows queued by older builds.
+  client_request_id?: string };
 // A voice note recorded offline. `localUri` is a copy of the recording under the app's document
 // directory (the recorder's own file lives in the cache dir, which the OS may purge before we
 // reconnect); it is uploaded to storage and deleted once the message row is created.
@@ -126,10 +130,11 @@ export async function enqueueOutboxMessage(localId: string, conversationId: stri
 export async function enqueueOutboxPost(localId: string, payload: OutboxPostPayload, userId?: string) {
   const owner = userId ?? (await currentUserId());
   if (!owner) throw new Error("You need to be signed in to queue a post.");
+  const withKey: OutboxPostPayload = { ...payload, client_request_id: payload.client_request_id ?? makeUuid() };
   await safeDb((db) =>
     db.runAsync(
       "INSERT INTO outbox (local_id, kind, conversation_id, payload, created_at, attempts, user_id, status, next_attempt_at) VALUES (?, 'post', NULL, ?, ?, 0, ?, 'pending', 0);",
-      [localId, JSON.stringify(payload), new Date().toISOString(), owner]
+      [localId, JSON.stringify(withKey), new Date().toISOString(), owner]
     )
   );
   emitOutboxChange();
@@ -299,7 +304,14 @@ function isDuplicateUpload(error: unknown): boolean {
 }
 
 async function flushOutboxPost(row: OutboxRow) {
-  const { posted_as_page_id, ...body } = JSON.parse(row.payload) as OutboxPostPayload;
+  const parsed = JSON.parse(row.payload) as OutboxPostPayload;
+  // Rows queued before the key existed get one now, persisted before the request goes out so every
+  // later retry of this row reuses it.
+  if (!parsed.client_request_id) {
+    parsed.client_request_id = makeUuid();
+    await safeDb((db) => db.runAsync("UPDATE outbox SET payload = ? WHERE local_id = ?;", [JSON.stringify(parsed), row.local_id]));
+  }
+  const { posted_as_page_id, ...body } = parsed;
   const { data, error } = posted_as_page_id
     ? await supabase.functions.invoke("create-page-post", { body: { ...body, page_id: posted_as_page_id } })
     : await supabase.functions.invoke("create-post", { body });
