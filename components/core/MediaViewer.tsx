@@ -27,7 +27,7 @@ const DISMISS_VELOCITY = 800;
 
 /** Video with a short pause/replay-on-visibility toggle, matching MediaHeroPlayer's pattern. */
 function ViewerVideo({ uri, width, height, active }: { uri: string; width: number; height: number; active: boolean }) {
-  const player = useVideoPlayer(uri, (instance) => { instance.loop = true; });
+  const player = useVideoPlayer({ uri, useCaching: true }, (instance) => { instance.loop = true; });
   useEffect(() => {
     if (active) player.play(); else player.pause();
   }, [active, player]);

@@ -10,7 +10,8 @@ import { useState } from "react";
 import { ActivityIndicator, Alert, FlatList, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Avatar, Button, PressableScale, Screen, Text, VerifiedBadge } from "@/components/core";
-import { ErrorState, Skeleton } from "@/components/feedback";
+import { ErrorState, OfflineState, Skeleton } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 import { PostCard } from "@/components/feed/PostCard";
 import { ProjectMiniGrid } from "@/components/projects/ProjectMiniCard";
 import { usePage, usePageFollow, useIdentityPosts, useTogglePageFollow } from "@/features/discovery/api";
@@ -35,6 +36,7 @@ export default function PageProfile() {
   const isMember = !!myPages.data?.some((mine) => mine.id === page.data?.id);
 
   if (page.isLoading) return <Screen><Skeleton height={220} /></Screen>;
+  if (getScreenState(page) === "offline") return <Screen><OfflineState onRetry={() => void page.refetch()} /></Screen>;
   if (page.isError || !page.data) return <Screen><ErrorState message="Page unavailable." onRetry={() => void page.refetch()} /></Screen>;
   const p = page.data;
   const projectRows = projects.data ?? [];
@@ -73,7 +75,9 @@ export default function PageProfile() {
       <Screen scroll contentStyle={{ paddingHorizontal: 0 }}>
         {header}
         <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
-          {projects.isLoading ? (
+          {getScreenState(projects) === "offline" ? (
+            <OfflineState onRetry={() => void projects.refetch()} />
+          ) : projects.isLoading ? (
             <ActivityIndicator color={colors.accent} style={{ marginVertical: 34 }} />
           ) : projectRows.length === 0 ? (
             <Text color="muted" align="center" style={{ paddingVertical: 45, paddingHorizontal: 12 }}>
@@ -100,7 +104,7 @@ export default function PageProfile() {
         onEndReachedThreshold={0.5}
         refreshing={posts.isRefetching}
         onRefresh={() => { void page.refetch(); void posts.refetch(); }}
-        ListEmptyComponent={posts.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 34 }} /> : <Text color="muted" align="center" style={{ paddingVertical: 45 }}>{p.name} hasn't posted anything yet.</Text>}
+        ListEmptyComponent={getScreenState(posts) === "offline" ? <OfflineState onRetry={() => void posts.refetch()} /> : posts.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 34 }} /> : <Text color="muted" align="center" style={{ paddingVertical: 45 }}>{p.name} hasn't posted anything yet.</Text>}
         ListFooterComponent={posts.isFetchingNextPage ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 18 }} /> : null}
       />
     </Screen>

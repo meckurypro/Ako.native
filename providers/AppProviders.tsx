@@ -9,6 +9,7 @@ import { createSQLitePersister } from "@/lib/query-persister";
 import { NetworkProvider, onNetworkReconnect } from "@/lib/network";
 import { flushOutbox } from "@/lib/outbox";
 import { pruneStaleProfiles } from "@/lib/local-cache";
+import { configureVideoCache } from "@/lib/media-cache";
 import { primeVoicePlaybackPositions } from "@/features/messaging/voicePlaybackPosition";
 import { usePushRegistration } from "@/features/notifications/push";
 import { AuthProvider, useAuth } from "./AuthProvider";
@@ -21,6 +22,9 @@ primeVoicePlaybackPositions();
 
 // Cached profile rows older than a week are dead weight (and stale avatars); drop them once per launch.
 void pruneStaleProfiles();
+
+// Cap expo-video's disk cache (used for post videos). Must run before any video player exists.
+configureVideoCache();
 
 // Bump this when a persisted query shape changes incompatibly (e.g. a field renamed
 // in a query's return type) to invalidate old cached rows instead of crashing on them.

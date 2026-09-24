@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
 import { Text } from "@/components/core";
+import { OfflineState } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 import { formatUsd, useFeatureFlag, useWallet, useWalletTransactions, type WalletTransaction } from "@/features/wallet/api";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ProbationalLock } from "@/components/account/ProbationalLock";
@@ -41,7 +43,7 @@ export default function WalletScreen() {
 
   if (!walletEnabled) return <View style={[s.root, { backgroundColor: colors.background }]}><Header /><Text color="muted" align="center" style={s.disabled}>The wallet is temporarily unavailable. Check back later.</Text><BottomNavigation /></View>;
 
-  return <ProbationalLock featureKey="probational_wallet_enabled"><View style={[s.root, { backgroundColor: colors.background }]}><Header />{wallet.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={transactions.data ?? []} keyExtractor={(item) => item.id} contentContainerStyle={s.list} ListHeaderComponent={<><BalanceCard balance={wallet.data?.balance ?? 0} depositsEnabled={depositsEnabled} withdrawalsEnabled={withdrawalsEnabled} affiliateEnabled={affiliateEnabled} /><Text style={s.recentTitle}>Recent activity</Text></>} ListEmptyComponent={<View style={s.empty}><Text color="muted" align="center" style={s.emptyMain}>No transactions yet.</Text><Text color="muted" align="center" style={s.emptySub}>Everything you fund, spend, and earn will show up here.</Text></View>} renderItem={({ item }) => <TransactionRow transaction={item} />} refreshing={transactions.isRefetching || wallet.isRefetching} onRefresh={() => { void wallet.refetch(); void transactions.refetch(); }} /> }<BottomNavigation /></View></ProbationalLock>;
+  return <ProbationalLock featureKey="probational_wallet_enabled"><View style={[s.root, { backgroundColor: colors.background }]}><Header />{getScreenState(wallet) === "offline" ? <OfflineState message="Your balance isn’t saved on this device. It will load when you’re back online." onRetry={() => void wallet.refetch()} /> : wallet.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={transactions.data ?? []} keyExtractor={(item) => item.id} contentContainerStyle={s.list} ListHeaderComponent={<><BalanceCard balance={wallet.data?.balance ?? 0} depositsEnabled={depositsEnabled} withdrawalsEnabled={withdrawalsEnabled} affiliateEnabled={affiliateEnabled} /><Text style={s.recentTitle}>Recent activity</Text></>} ListEmptyComponent={<View style={s.empty}><Text color="muted" align="center" style={s.emptyMain}>No transactions yet.</Text><Text color="muted" align="center" style={s.emptySub}>Everything you fund, spend, and earn will show up here.</Text></View>} renderItem={({ item }) => <TransactionRow transaction={item} />} refreshing={transactions.isRefetching || wallet.isRefetching} onRefresh={() => { void wallet.refetch(); void transactions.refetch(); }} /> }<BottomNavigation /></View></ProbationalLock>;
 }
 
 function Header() {

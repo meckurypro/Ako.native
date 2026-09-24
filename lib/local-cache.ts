@@ -35,6 +35,16 @@ export async function getCachedProfile(id: string): Promise<CachedProfile | unde
   return row ?? undefined;
 }
 
+export async function getCachedProfileByUsername(username: string): Promise<CachedProfile | undefined> {
+  const row = await safeDb(async db =>
+    db.getFirstAsync<CachedProfile>(
+      "SELECT id, username, display_name, avatar_url, last_seen_at FROM profiles_cache WHERE username = ?;",
+      [username],
+    ),
+  );
+  return row ?? undefined;
+}
+
 export async function pruneStaleProfiles() {
   await safeDb(async db => db.runAsync("DELETE FROM profiles_cache WHERE cached_at < ?;", [Date.now() - PROFILE_TTL_MS]));
 }

@@ -7,7 +7,8 @@ import { useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Avatar, Button, Screen, Text } from "@/components/core";
-import { EmptyState, ErrorState } from "@/components/feedback";
+import { EmptyState, ErrorState, OfflineState } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 import {
   useAcceptFollowRequest,
   useDeclineFollowRequest,
@@ -81,7 +82,9 @@ export default function FollowRequestsScreen() {
           refreshing={requests.isRefetching}
           onRefresh={() => void requests.refetch()}
           ListEmptyComponent={
-            !requests.isLoading ? (
+            getScreenState(requests) === "offline" ? (
+              <OfflineState onRetry={() => void requests.refetch()} />
+            ) : !requests.isLoading ? (
               <EmptyState icon="user-check" title="No requests" message="No pending follow requests." />
             ) : null
           }
