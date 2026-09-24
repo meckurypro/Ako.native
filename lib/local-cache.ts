@@ -26,12 +26,13 @@ export async function cacheProfiles(profiles: CachedProfile[]) {
 }
 
 export async function getCachedProfile(id: string): Promise<CachedProfile | undefined> {
-  return safeDb(async db =>
+  const row = await safeDb(async db =>
     db.getFirstAsync<CachedProfile>(
       "SELECT id, username, display_name, avatar_url, last_seen_at FROM profiles_cache WHERE id = ?;",
       [id],
     ),
   );
+  return row ?? undefined;
 }
 
 export async function pruneStaleProfiles() {
@@ -65,11 +66,35 @@ export async function cacheMessages(conversationId: string, messages: Message[])
 
 export async function getCachedMessages(conversationId: string): Promise<Message[] | undefined> {
   const rows = await safeDb(async db =>
-    db.getAllAsync<Message & { is_deleted: number }>(
+    db.getAllAsync<Omit<Message, "is_deleted"> & { is_deleted: number }>(
       "SELECT id, conversation_id, sender_id, content, created_at, delivered_at, read_at, reply_to_message_id, is_deleted FROM messages_cache WHERE conversation_id = ? ORDER BY created_at ASC;",
       [conversationId],
     ),
   );
   if (!rows?.length) return undefined;
   return rows.map(row => ({ ...row, is_deleted: !!row.is_deleted }));
+}
+
+// Signed URLs (currently just the private `audio` bucket) are requested with a 1hr TTL
+// wherever they're created (see lib/media-cache.ts) — cache them keyed by storage path so
+// a bubble scrolling in and out of view, or a replay, doesn't hit Supabase every time.
+export async function getCachedSignedUrl(storagePath: string): Promise<string | undefined> {
+  const row = await safeDb(async db =>
+    db.getFirstAsync<{ url: string; expires_at: number }>(
+      "SELECT url, expires_at FROM signed_urls_cache WHERE storage_path = ?;",
+      [storagePath],
+    ),
+  );
+  if (!row || row.expires_at <= Date.now()) return undefined;
+  return row.url;
+}
+
+export async function cacheSignedUrl(storagePath: string, url: string, expiresAtMs: number) {
+  await safeDb(db =>
+    db.runAsync(
+      `INSERT INTO signed_urls_cache (storage_path, url, expires_at) VALUES (?, ?, ?)
+       ON CONFLICT(storage_path) DO UPDATE SET url = excluded.url, expires_at = excluded.expires_at;`,
+      [storagePath, url, expiresAtMs],
+    ),
+  );
 }

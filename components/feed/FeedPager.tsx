@@ -13,6 +13,7 @@ import { FeedSwipeGestureContext } from "@/components/feed/FeedSwipeGesture";
 import { useFeedChrome } from "@/components/navigation/FeedChrome";
 import { useFeed, useTopicFeed } from "@/features/feed/api";
 import type { FeedMode, Post } from "@/features/feed/types";
+import { prefetchImages } from "@/lib/media-cache";
 import { useTheme } from "@/providers/ThemeProvider";
 
 const MODES: FeedMode[] = ["ranked", "top", "following"];
@@ -23,6 +24,16 @@ type Props = { index: number; onIndexChange: (index: number) => void; interestId
 const FeedPane = memo(function FeedPane({ mode, interestId, nativeGesture }: { mode: FeedMode; interestId?: string; nativeGesture: ReturnType<typeof Gesture.Native> }) {
   const rankedFeed = useFeed(mode, !(mode === "ranked" && !!interestId)); const topicFeed = useTopicFeed(mode === "ranked" ? interestId : undefined); const feed = mode === "ranked" && interestId ? topicFeed : rankedFeed; const { colors } = useTheme(); const { scrollHandler } = useFeedChrome(); const insets = useSafeAreaInsets(); const router = useRouter();
   const posts = feed.data?.pages.flat() ?? []; const render = useCallback(({ item }: { item: Post }) => <PostCard post={item} />, []);
+  // Every time a new page lands (initial load, or another page from
+  // onEndReached), warm expo-image's disk cache for the avatars and lead
+  // image of the posts in it, so they've usually already finished
+  // downloading by the time the FlatList actually scrolls them into view.
+  const pageCount = feed.data?.pages.length ?? 0;
+  useEffect(() => {
+    const lastPage = feed.data?.pages.at(-1);
+    if (!lastPage?.length) return;
+    prefetchImages(lastPage.flatMap(post => [post.author.avatar_url, post.posted_as_page?.avatar_url ?? null, post.media_urls[0] ?? null]));
+  }, [feed.data, pageCount]);
   const empty = mode === "following" ? "No posts from people you follow yet. Follow a few people to see their posts here." : mode === "top" ? "Nothing's picked up much discussion in the last week yet." : "No posts yet. Be the first to share a thought.";
   if (feed.isLoading && !posts.length) return <FeedSkeleton />;
   if (feed.isError && !posts.length) return <ErrorState message="Couldn't load your feed." onRetry={() => void feed.refetch()} />;
