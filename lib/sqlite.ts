@@ -1,14 +1,15 @@
 // File: lib/sqlite.ts
-// Local on-device cache. Backs four things:
+// Local on-device cache. Backs five things:
 //  - kv_cache: the persisted react-query cache (so screens paint from disk on cold start)
 //  - profiles_cache: last-known profile rows (avatar_url, display_name, username, last_seen_at)
 //  - messages_cache: last N messages per conversation, so chats open instantly offline
 //  - signed_urls_cache: Supabase Storage signed URLs (currently just the private `audio`
 //    bucket voice notes), so replaying/rescrolling a bubble doesn't re-request one every time
+//  - outbox: messages composed while offline, retried once the network returns
 import * as SQLite from "expo-sqlite";
 
 const DB_NAME = "ako-cache.db";
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -53,6 +54,19 @@ async function openDb(): Promise<SQLite.SQLiteDatabase> {
         storage_path TEXT PRIMARY KEY NOT NULL,
         url TEXT NOT NULL,
         expires_at INTEGER NOT NULL
+      );
+
+      -- Outbox: messages composed while offline. Each row is retried in order
+      -- once the network comes back (see lib/outbox.ts); the message stays
+      -- visible in its thread the whole time under its local id.
+      CREATE TABLE IF NOT EXISTS outbox (
+        local_id TEXT PRIMARY KEY NOT NULL,
+        conversation_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT
       );
     `);
     await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);

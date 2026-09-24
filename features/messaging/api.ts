@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { File } from "expo-file-system";
 import { cacheMessages, cacheProfiles, getCachedMessages } from "@/lib/local-cache";
+import { enqueueOutboxMessage, isLocalMessageId, makeLocalMessageId } from "@/lib/outbox";
+import { isCurrentlyOffline } from "@/lib/network";
 
 export type ConversationSummary = { id:string; last_message_at:string; pinned_at:string|null; archived_at:string|null; is_request:boolean; is_group:boolean; team_page:{id:string;username:string;name:string;avatar_url:string|null}|null; other_participant:{id:string;username:string;display_name:string;avatar_url:string|null}; last_message:{id:string;content:string;sender_id:string;delivered_at:string|null;read_at:string|null;is_deleted:boolean}|null; unreadCount:number };
 type Participant = { conversation_id:string; last_read_at:string|null; archived_at:string|null; pinned_at:string|null; hidden_at:string|null; left_at:string|null; is_request?:boolean };
@@ -52,7 +54,11 @@ export function useMessages(conversationId:string){
   return useQuery({queryKey:["mobile-messages",conversationId],enabled:!!user&&!!conversationId,queryFn:async()=>{const{data,error}=await supabase.from("messages").select("id, conversation_id, sender_id, content, created_at, delivered_at, read_at, reply_to_message_id, is_deleted").eq("conversation_id",conversationId).order("created_at",{ascending:false}).limit(100);if(error)throw error;const messages=((data??[]) as Message[]).reverse();void cacheMessages(conversationId,messages);return messages;},refetchInterval:5000});
 }
 
-export function useSendMessage(conversationId:string){const{user}=useAuth();const client=useQueryClient();return useMutation({mutationFn:async(content:string)=>{if(!user)throw new Error("Not signed in");const clean=content.trim();if(!clean)throw new Error("Message cannot be empty");const{data,error}=await supabase.from("messages").insert({conversation_id:conversationId,sender_id:user.id,content:clean,delivered_at:new Date().toISOString()}).select("id, conversation_id, sender_id, content, created_at, delivered_at, read_at, reply_to_message_id, is_deleted").single();if(error)throw error;await supabase.from("conversation_participants").update({is_request:false,archived_at:null}).eq("conversation_id",conversationId).eq("user_id",user.id);return data as Message;},onSuccess:(message)=>{client.setQueryData<Message[]>(["mobile-messages",conversationId],old=>[...(old??[]),message]);void cacheMessages(conversationId,[message]);void client.invalidateQueries({queryKey:["mobile-conversations"]});}});}
+export { isLocalMessageId } from "@/lib/outbox";
+
+export function useSendMessage(conversationId:string){const{user}=useAuth();const client=useQueryClient();return useMutation({mutationFn:async(content:string):Promise<Message>=>{if(!user)throw new Error("Not signed in");const clean=content.trim();if(!clean)throw new Error("Message cannot be empty");
+  if(await isCurrentlyOffline()){const localId=makeLocalMessageId();const localMessage:Message={id:localId,conversation_id:conversationId,sender_id:user.id,content:clean,created_at:new Date().toISOString(),delivered_at:null,read_at:null,reply_to_message_id:null,is_deleted:false};await enqueueOutboxMessage(localId,conversationId,{content:clean,senderId:user.id});return localMessage;}
+  const{data,error}=await supabase.from("messages").insert({conversation_id:conversationId,sender_id:user.id,content:clean,delivered_at:new Date().toISOString()}).select("id, conversation_id, sender_id, content, created_at, delivered_at, read_at, reply_to_message_id, is_deleted").single();if(error)throw error;await supabase.from("conversation_participants").update({is_request:false,archived_at:null}).eq("conversation_id",conversationId).eq("user_id",user.id);return data as Message;},onSuccess:(message)=>{client.setQueryData<Message[]>(["mobile-messages",conversationId],old=>[...(old??[]),message]);if(!isLocalMessageId(message.id)){void cacheMessages(conversationId,[message]);void client.invalidateQueries({queryKey:["mobile-conversations"]});}}});}
 
 export type VoiceNotePayload={path?:string;url?:string;durationSec:number;peaks?:number[];viewOnce?:boolean};
 const VOICE_MARKER="ako-voice-note:v1:";

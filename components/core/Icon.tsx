@@ -150,6 +150,7 @@ import {
   VolumeX,
   Wallet,
   Wallet2,
+  WifiOff,
   X,
   XCircle,
 } from "lucide-react-native";
@@ -286,6 +287,7 @@ export const ICONS = {
   "volume-x": VolumeX,
   "wallet": Wallet,
   "wallet-2": Wallet2,
+  "wifi-off": WifiOff,
   "x": X,
   "x-circle": XCircle,
 } as const satisfies Record<string, LucideIcon>;

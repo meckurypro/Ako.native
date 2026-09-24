@@ -3,6 +3,7 @@ import { Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Switc
 import { Icon } from "@/components/core/Icon";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import { ensurePermission } from "@/lib/permissions";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Avatar, Text } from "@/components/core";
@@ -97,6 +98,8 @@ function NewProjectScreen() {
   }, [type, bookOwnWork]);
 
   const chooseThumbnail = async () => {
+    const granted = await ensurePermission("mediaLibrary");
+    if (!granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 0.9 });
     if (result.canceled) return;
     const asset = result.assets[0];

@@ -9,6 +9,7 @@ import { Avatar, Button, Input, Text } from "@/components/core";
 import { useAvatarUpload } from "@/features/profile/useAvatarUpload";
 import { friendlyAuthError, normalizeUsername } from "@/features/auth/validation";
 import { useBiometricCapability, useBiometricLockSetting } from "@/features/security/biometric";
+import { ensurePermission } from "@/lib/permissions";
 import {
   useBlockedList,
   useChangePassword,
@@ -102,8 +103,8 @@ function ProfileForm({ profile }: { profile: any }) {
   const availability = useUsernameAvailability(username, profile.username, user?.id);
 
   const choosePhoto = async (source: "camera" | "library") => {
-    const permission = source === "camera" ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { Alert.alert("Permission needed", source === "camera" ? "Allow camera access to take a profile photo." : "Allow photo access to choose a profile image."); return; }
+    const granted = await ensurePermission(source === "camera" ? "camera" : "mediaLibrary");
+    if (!granted) return;
     const result = source === "camera" ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: .9 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: .9 });
     if (result.canceled) return;
     try { await upload.mutateAsync(result.assets[0]); await queryClient.invalidateQueries({ queryKey: ["own-profile"] }); }
