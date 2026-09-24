@@ -19,6 +19,7 @@
 //  - Message inserts carry a client-generated id, so retrying after a timed-out-but-successful
 //    insert is a no-op rather than a duplicate.
 import { Directory, File, Paths } from "expo-file-system";
+import { adoptAudioFile } from "./audio-cache";
 import { safeDb } from "./sqlite";
 import { supabase } from "./supabase";
 import { queryClient } from "./query-client";
@@ -295,6 +296,9 @@ async function flushOutboxVoice(row: OutboxRow) {
   const { message, alreadySent } = await insertMessageOnce({ id, conversation_id: conversationId, sender_id: payload.senderId, content, reply_to_message_id: payload.replyToMessageId ?? null });
   await supabase.from("conversation_participants").update({ is_request: false, archived_at: null }).eq("conversation_id", conversationId).eq("user_id", payload.senderId);
   reconcileLocalMessage(conversationId, row.local_id, message, !alreadySent);
+  // File the recording under its storage path so replaying your own note needs no download (never for
+  // view-once). The copy is made before this returns control, so deleting the original right after is safe.
+  if (!payload.viewOnce) void adoptAudioFile(path, payload.localUri);
   try { file.delete(); } catch { /* best-effort cleanup */ }
 }
 
