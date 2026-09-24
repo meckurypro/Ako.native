@@ -4,7 +4,7 @@ import { Icon } from "@/components/core/Icon";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, { Easing, runOnJS, useAnimatedStyle, withTiming, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/core";
 import { EmptyState, ErrorState } from "@/components/feedback";
 import { FeedSkeleton } from "@/components/feed/FeedSkeleton";
@@ -17,9 +17,17 @@ import { prefetchImages } from "@/lib/media-cache";
 import { useTheme } from "@/providers/ThemeProvider";
 
 const MODES: FeedMode[] = ["ranked", "top", "following"];
-const COMMIT_RATIO = .33; const COMMIT_VELOCITY = 800; const EDGE_RESISTANCE = 2.5;
+// Matches web's SwipeableTabs (src/components/SwipeableTabs.tsx). COMMIT_VELOCITY is web's
+// 0.5 px/ms converted to this gesture handler's px/s units (0.5 px/ms == 500 px/s) — this used
+// to be 800, a noticeably stiffer flick threshold than web's, which read as heavier/less
+// responsive next to it.
+const COMMIT_RATIO = .33; const COMMIT_VELOCITY = 500; const EDGE_RESISTANCE = 2.5;
+// Same 300ms cubic-bezier web uses for both the drag-settle and a tab-button jump, instead of a
+// spring: a spring (withSpring) can overshoot/oscillate past the target, which is what read as
+// "too much" next to web's single deterministic curve.
+const SETTLE_DURATION = 300; const SETTLE_EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
-type Props = { index: number; onIndexChange: (index: number) => void; interestId?: string };
+type Props = { index: number; onIndexChange: (index: number) => void; interestId?: string; progress: SharedValue<number> };
 
 const FeedPane = memo(function FeedPane({ mode, interestId, nativeGesture }: { mode: FeedMode; interestId?: string; nativeGesture: ReturnType<typeof Gesture.Native> }) {
   const rankedFeed = useFeed(mode, !(mode === "ranked" && !!interestId)); const topicFeed = useTopicFeed(mode === "ranked" ? interestId : undefined); const feed = mode === "ranked" && interestId ? topicFeed : rankedFeed; const { colors } = useTheme(); const { scrollHandler } = useFeedChrome(); const insets = useSafeAreaInsets(); const router = useRouter();
@@ -46,11 +54,11 @@ const FeedPane = memo(function FeedPane({ mode, interestId, nativeGesture }: { m
 });
 const Separator = () => <View style={s.separator} />;
 
-export function FeedPager({ index, onIndexChange, interestId }: Props) {
-  const { width } = useWindowDimensions(); const translateX = useSharedValue(-index * width); const [visited, setVisited] = useState<Set<number>>(() => new Set([0, 1]));
+export function FeedPager({ index, onIndexChange, interestId, progress }: Props) {
+  const { width } = useWindowDimensions(); const [visited, setVisited] = useState<Set<number>>(() => new Set([0, 1]));
   const nativeGestures = useMemo(() => Object.fromEntries(MODES.map(mode => [mode, Gesture.Native()])) as Record<FeedMode, ReturnType<typeof Gesture.Native>>, []);
   const ensureVisited = useCallback((next: number) => setVisited(current => current.has(next) ? current : new Set([...current, next])), []);
-  useEffect(() => { translateX.set(withSpring(-index * width, { damping: 20, stiffness: 220 })); }, [index, translateX, width]);
+  useEffect(() => { progress.set(withTiming(index, { duration: SETTLE_DURATION, easing: SETTLE_EASING })); }, [index, progress]);
   const settle = useCallback((next: number) => { ensureVisited(next); onIndexChange(next); }, [ensureVisited, onIndexChange]);
   const pan = useMemo(() => Gesture.Pan().activeOffsetX([-6, 6]).failOffsetY([-6, 6])
     .onUpdate(event => {
@@ -60,7 +68,7 @@ export function FeedPager({ index, onIndexChange, interestId }: Props) {
       if ((current === 0 && drag > 0) || (current === 2 && drag < 0)) drag /= EDGE_RESISTANCE;
       const position = current - drag / width;
       const nextProgress = Math.max(0, Math.min(2, position));
-      translateX.set(-nextProgress * width);
+      progress.set(nextProgress);
       const neighbor = drag < -6 ? Math.min(2, current + 1) : drag > 6 ? Math.max(0, current - 1) : current;
       if (neighbor !== current) runOnJS(ensureVisited)(neighbor);
     })
@@ -71,10 +79,10 @@ export function FeedPager({ index, onIndexChange, interestId }: Props) {
       let next = current;
       if (ratio <= -COMMIT_RATIO || event.velocityX <= -COMMIT_VELOCITY) next = Math.min(2, current + 1);
       else if (ratio >= COMMIT_RATIO || event.velocityX >= COMMIT_VELOCITY) next = Math.max(0, current - 1);
-      translateX.set(withSpring(-next * width, { damping: 20, stiffness: 220 }));
+      progress.set(withTiming(next, { duration: SETTLE_DURATION, easing: SETTLE_EASING }));
       if (next !== current) runOnJS(settle)(next);
-    }), [ensureVisited, index, settle, translateX, width]);
-  const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
+    }), [ensureVisited, index, progress, settle, width]);
+  const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -progress.value * width }] }));
   const composed = useMemo(() => Gesture.Simultaneous(pan, ...Object.values(nativeGestures)), [pan, nativeGestures]);
   return <FeedSwipeGestureContext.Provider value={pan}><GestureDetector gesture={composed}><Animated.View style={[s.track, { width: width * 3 }, trackStyle]}>{MODES.map((mode, pane) => <View key={mode} style={{ width }}>{visited.has(pane) || pane === index ? <FeedPane mode={mode} interestId={mode === "ranked" ? interestId : undefined} nativeGesture={nativeGestures[mode]} /> : <View style={{ flex: 1 }} />}</View>)}</Animated.View></GestureDetector></FeedSwipeGestureContext.Provider>;
 }
