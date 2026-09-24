@@ -15,7 +15,7 @@ import { MessageActionMenu, type MessageAnchor } from "@/components/messaging/Me
 import { DeleteMessageSheet } from "@/components/messaging/DeleteMessageSheet";
 import { ForwardMessageSheet } from "@/components/messaging/ForwardMessageSheet";
 import { EmojiPickerSheet } from "@/components/messaging/EmojiPickerSheet";
-import { useBulkMessageState, useConversationReactions, useDeleteMessages, useMessageUserStates, useRemoveReaction, useSetReaction, useToggleMessageState, useUserTopEmojis, type MessageReaction } from "@/features/messaging/messageState";
+import { useBulkMessageState, useConversationReactions, useDeleteMessages, useMarkVoiceNoteOpened, useMessageUserStates, useRemoveReaction, useSetReaction, useToggleMessageState, useUserTopEmojis, type MessageReaction } from "@/features/messaging/messageState";
 import { VoiceRecordingHeldHint, VoiceRecordingLockedBar } from "@/components/messaging/VoiceRecordingOverlay";
 import { useVoiceRecorder } from "@/features/messaging/useVoiceRecorder";
 import { useAuth } from "@/providers/AuthProvider";
@@ -68,6 +68,7 @@ export default function MessageThreadScreen() {
   const bulkState = useBulkMessageState(cid);
   const deleteMessages = useDeleteMessages(cid);
   const setReaction = useSetReaction(cid);
+  const markVoiceNoteOpened = useMarkVoiceNoteOpened(cid);
   const removeReaction = useRemoveReaction(cid);
   const [menu, setMenu] = useState<{ message: Message; anchor: MessageAnchor } | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
@@ -129,6 +130,7 @@ export default function MessageThreadScreen() {
     animateIn={hasLoadedRef.current && !seenIdsRef.current.has(item.id)}
     starred={!!stateMap?.[item.id]?.starred_at}
     pinned={!!stateMap?.[item.id]?.pinned_at}
+    openedOnce={!!stateMap?.[item.id]?.opened_once_at}
     reactions={reactionMap?.[item.id]}
     myId={user?.id ?? ""}
     selectMode={selecting}
@@ -137,8 +139,9 @@ export default function MessageThreadScreen() {
     onQuoteTap={scrollToMessage}
     onLongPress={openMenu}
     onToggleSelect={toggleSelected}
+    onOpenedOnce={() => markVoiceNoteOpened.mutate(item.id)}
     onReactionPress={(messageId, emoji, mine) => (mine ? removeReaction.mutate(messageId, { onError: onActionError }) : setReaction.mutate({ messageId, emoji }, { onError: onActionError }))}
-  />, [colors.accent, user?.id, messagesById, flashId, startReply, scrollToMessage, stateMap, reactionMap, selecting, selectedIds, openMenu, toggleSelected]);
+  />, [colors.accent, user?.id, messagesById, flashId, startReply, scrollToMessage, stateMap, reactionMap, selecting, selectedIds, openMenu, toggleSelected, markVoiceNoteOpened]);
   const sendPreview=()=>{if(!voicePreview||sendVoice.isPending)return;const preview=voicePreview;setVoicePreview(null);sendVoice.mutate(preview,{onError:()=>{setVoicePreview(preview);Alert.alert("Couldn't send voice message","Please try again.");}});};
   const openProfile = () => { if (person?.username) router.push({ pathname: "/profiles/[username]", params: { username: person.username } }); };
   // Only a truly cold open (no cached conversation-list entry to seed
@@ -207,8 +210,8 @@ export default function MessageThreadScreen() {
   </KeyboardAvoidingView></SafeAreaView>;
 }
 
-type BubbleProps = { item: Message; own: boolean; accent: string; repliedTo: Message | null; repliedToIsMe: boolean; isFlashed: boolean; animateIn: boolean; starred: boolean; pinned: boolean; reactions: MessageReaction[] | undefined; myId: string; selectMode: boolean; selected: boolean; onSwipeReply: (m: Message) => void; onQuoteTap: (id: string) => void; onLongPress: (m: Message, anchor: MessageAnchor) => void; onToggleSelect: (id: string) => void; onReactionPress: (messageId: string, emoji: string, mine: boolean) => void };
-const Bubble = memo(function Bubble({ item, own, accent, repliedTo, repliedToIsMe, isFlashed, animateIn, starred, pinned, reactions, myId, selectMode, selected, onSwipeReply, onQuoteTap, onLongPress, onToggleSelect, onReactionPress }: BubbleProps) {
+type BubbleProps = { item: Message; own: boolean; accent: string; repliedTo: Message | null; repliedToIsMe: boolean; isFlashed: boolean; animateIn: boolean; starred: boolean; pinned: boolean; openedOnce: boolean; reactions: MessageReaction[] | undefined; myId: string; selectMode: boolean; selected: boolean; onSwipeReply: (m: Message) => void; onQuoteTap: (id: string) => void; onLongPress: (m: Message, anchor: MessageAnchor) => void; onToggleSelect: (id: string) => void; onOpenedOnce: () => void; onReactionPress: (messageId: string, emoji: string, mine: boolean) => void };
+const Bubble = memo(function Bubble({ item, own, accent, repliedTo, repliedToIsMe, isFlashed, animateIn, starred, pinned, openedOnce, reactions, myId, selectMode, selected, onSwipeReply, onQuoteTap, onLongPress, onToggleSelect, onOpenedOnce, onReactionPress }: BubbleProps) {
   const voice=decodeVoiceNote(item.content);
   const repliedVoice = repliedTo && !repliedTo.is_deleted ? decodeVoiceNote(repliedTo.content) : null;
 
@@ -260,7 +263,7 @@ const Bubble = memo(function Bubble({ item, own, accent, repliedTo, repliedToIsM
           <Text numberOfLines={1} style={[s.quoteName, own && { color: "#07130D" }]}>{repliedToIsMe ? "You" : ""}</Text>
           <Text numberOfLines={1} style={[s.quoteSnippet, own && { color: "#173526" }]}>{repliedTo.is_deleted ? "Original message deleted" : repliedVoice ? "Voice note" : repliedTo.content}</Text>
         </Pressable>}
-        {item.is_deleted ? <Text color={own ? "primary" : "muted"} style={s.deleted}>This message was deleted</Text> : voice?.path?<VoiceNote id={item.id} path={voice.path} durationSec={voice.durationSec} peaks={voice.peaks} own={own} viewOnce={voice.viewOnce}/>:<Text style={[s.messageText, own && { color: "#07130D" }]}>{item.content}</Text>}
+        {item.is_deleted ? <Text color={own ? "primary" : "muted"} style={s.deleted}>This message was deleted</Text> : voice?.path?<VoiceNote id={item.id} path={voice.path} durationSec={voice.durationSec} peaks={voice.peaks} own={own} viewOnce={voice.viewOnce} openedOnce={openedOnce} onOpenedOnce={onOpenedOnce}/>:<Text style={[s.messageText, own && { color: "#07130D" }]}>{item.content}</Text>}
         <View style={s.meta}>{pinned && <Icon name="pin" size={11} color={own ? "#173526" : "#9DA39E"} fill={own ? "#173526" : "#9DA39E"} />}{starred && <Icon name="star" size={11} color={own ? "#173526" : "#9DA39E"} fill={own ? "#173526" : "#9DA39E"} />}<Text style={[s.time, own && { color: "#173526" }]}>{time(item.created_at)}</Text>{own && <Icon name={item.read_at ? "check-check" : "check"} size={15} color={item.read_at ? "#075B9B" : "#173526"} />}</View>
         </Pressable>
       </Animated.View>
