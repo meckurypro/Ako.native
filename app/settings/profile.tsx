@@ -11,6 +11,7 @@ import { friendlyAuthError, normalizeUsername } from "@/features/auth/validation
 import { useBiometricCapability, useBiometricLockSetting } from "@/features/security/biometric";
 import { useNotificationSettings } from "@/features/notifications/settings";
 import { ensurePermission } from "@/lib/permissions";
+import { confirmSignOutWithUnsent } from "@/features/auth/confirmSignOut";
 import {
   useBlockedList,
   useChangePassword,
@@ -194,7 +195,7 @@ function AdvancedSettings() {
   return <View style={s.form}><Text color="secondary">Advanced account controls are kept here so they are not mixed with routine settings.</Text><Button label={deactivate.isPending ? "Deactivating…" : "Deactivate account"} variant="danger" loading={deactivate.isPending} onPress={confirm} />{user?.email ? <Text color="muted" variant="caption">Signed in as {user.email}</Text> : null}</View>;
 }
 
-function LogoutButton() { const { signOut } = useAuth(); const router = useRouter(); const [loading, setLoading] = useState(false); const logout = async () => { setLoading(true); try { await signOut(); router.replace("/(auth)"); } catch (err) { Alert.alert("Couldn't sign out", friendlyAuthError(err, "Check your connection and try again.")); setLoading(false); } }; return <Pressable disabled={loading} onPress={() => void logout()} style={s.logout}><Icon name="log-out" size={17} color="#85817C" /><Text color="muted" style={s.logoutText}>{loading ? "Logging out…" : "Log out"}</Text></Pressable>; }
+function LogoutButton() { const { signOut } = useAuth(); const router = useRouter(); const [loading, setLoading] = useState(false); const logout = async () => { if (!(await confirmSignOutWithUnsent())) return; setLoading(true); try { await signOut(); router.replace("/(auth)"); } catch (err) { Alert.alert("Couldn't sign out", friendlyAuthError(err, "Check your connection and try again.")); setLoading(false); } }; return <Pressable disabled={loading} onPress={() => void logout()} style={s.logout}><Icon name="log-out" size={17} color="#85817C" /><Text color="muted" style={s.logoutText}>{loading ? "Logging out…" : "Log out"}</Text></Pressable>; }
 
 function ToggleRow({ icon, title, description, checked, pending, onToggle, error }: { icon: IconName; title: string; description: string; checked: boolean; pending: boolean; onToggle: () => void; error?: string | null }) {
   const { colors } = useTheme();

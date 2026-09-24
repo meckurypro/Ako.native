@@ -24,6 +24,10 @@ export function useBiometricCapability() {
     void Promise.all([LocalAuthentication.hasHardwareAsync(), LocalAuthentication.isEnrolledAsync(), LocalAuthentication.supportedAuthenticationTypesAsync()]).then(([supported, enrolled, types]) => {
       if (!alive) return;
       setState({ loading: false, supported, enrolled, label: labelFor(types) });
+    }).catch(() => {
+      // Must still resolve `loading`: the lock gate holds an opaque cover until it does, so a native
+      // failure here would otherwise leave the app covered forever. Treat it as "can't lock".
+      if (alive) setState(current => ({ ...current, loading: false, supported: false, enrolled: false }));
     });
     return () => { alive = false; };
   }, []);

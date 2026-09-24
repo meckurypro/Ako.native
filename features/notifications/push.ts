@@ -9,6 +9,8 @@ import { AppState, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
+import { File, Paths } from "expo-file-system";
+import { ensurePermission } from "@/lib/permissions";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { isNotificationsOptedOut } from "./settings";
@@ -24,21 +26,39 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// The rationale-then-OS-prompt flow runs at most once per install. The marker lives in the app's
+// document directory (removed on uninstall) rather than SecureStore, whose iOS keychain entries
+// survive a reinstall and would suppress the prompt on a fresh install where the OS has forgotten it.
+// After this, Settings > Notifications (features/notifications/settings.ts) is the retry path.
+const PROMPTED_MARKER = new File(Paths.document, "push-permission-prompted");
+
+function markPrompted() {
+  try {
+    PROMPTED_MARKER.create({ overwrite: true });
+  } catch { /* if this fails we may ask once more next launch; harmless */ }
+}
+
 async function registerToken(userId: string) {
   if (Platform.OS === "web") return; // push_tokens.platform is constrained to ios/android; no push support on web anyway
   if (await isNotificationsOptedOut()) return; // explicit "off" from Settings (features/notifications/settings.ts) — don't silently re-register
   try {
-    const existing = await Notifications.getPermissionsAsync();
-    let status = existing.status;
-    if (status !== "granted") {
-      const requested = await Notifications.requestPermissionsAsync();
-      status = requested.status;
-    }
-    if (status !== "granted") return;
-
+    // Android 13+ only shows the permission prompt once a notification channel exists, so create it first.
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("default", { name: "Default", importance: Notifications.AndroidImportance.DEFAULT });
     }
+
+    const current = await Notifications.getPermissionsAsync();
+    let granted = current.granted;
+    if (!granted) {
+      // Ask (with our own rationale first, via ensurePermission) only while the OS will still show a
+      // prompt and only once per install; a denied/blocked state is left alone rather than re-nagging
+      // on every foreground.
+      if (current.canAskAgain && !PROMPTED_MARKER.exists) {
+        markPrompted();
+        granted = await ensurePermission("notifications");
+      }
+    }
+    if (!granted) return;
 
     const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
     if (!projectId) { console.warn("registerToken: no EAS projectId in app config, skipping"); return; }

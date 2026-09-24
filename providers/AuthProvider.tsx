@@ -3,6 +3,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 import { AppState } from "react-native";
 import { queryClient } from "@/lib/query-client";
+import { reconcileLocalDataOwner } from "@/lib/local-data";
 import { supabase } from "@/lib/supabase";
 
 export type AuthProfile = { username: string; display_name: string; bio: string | null; avatar_url: string | null; onboarding_completed: boolean };
@@ -34,6 +35,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const requestInFlight = useRef(false);
   const manualSignOut = useRef(false);
   const hadSession = useRef(false);
+  const lastUserId = useRef<string | null>(null);
+  const localDataChecked = useRef(false);
 
   const loadProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase.from("profiles").select("username, display_name, bio, avatar_url, onboarding_completed").eq("id", userId).maybeSingle();
@@ -52,6 +55,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (error) { setSessionExpired(true); await supabase.auth.signOut({ scope: "local" }); }
       const nextSession = error ? null : data.session;
       setSession(nextSession);
+      if (nextSession) lastUserId.current = nextSession.user.id;
       if (nextSession) {
         try { await loadProfile(nextSession.user.id); } catch { setProfile(null); }
       }
@@ -59,6 +63,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!mounted) return;
+      // A different account taking over the session (account switch, or signing in as someone else
+      // without a SIGNED_OUT in between) must never see the previous account's in-memory cache.
+      const nextUserId = nextSession?.user.id ?? null;
+      if (nextUserId && lastUserId.current && lastUserId.current !== nextUserId) queryClient.clear();
+      if (nextUserId) lastUserId.current = nextUserId;
       setSession(nextSession);
       if (nextSession) hadSession.current = true;
       if (event === "SIGNED_OUT" && hadSession.current && !manualSignOut.current) setSessionExpired(true);
@@ -69,6 +78,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
       if (!nextSession) {
         setProfile(null);
+        lastUserId.current = null;
         queryClient.clear();
       } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         void loadProfile(nextSession.user.id).catch(() => setProfile(null));
@@ -76,6 +86,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
     return () => { mounted = false; subscription.unsubscribe(); };
   }, [loadProfile]);
+
+  // On-device caches (SQLite + the persisted query cache) belong to one user. Once auth has resolved,
+  // and on every change of user id, make sure they are that user's — or wiped. Keyed on the id, not
+  // on SIGNED_OUT, because account switches go through setSession and never fire SIGNED_OUT.
+  // The outbox is user-scoped rather than wiped, so unsent items survive (lib/outbox.ts).
+  const userId = session?.user.id ?? null;
+  useEffect(() => {
+    if (!isReady) return;
+    const cold = !localDataChecked.current;
+    localDataChecked.current = true;
+    void reconcileLocalDataOwner(userId, { treatUnownedAsStale: cold }).then((wiped) => {
+      // In-memory clearing for sign-out/switch already happens above; the cold-start case is the
+      // one where a stale persisted cache was hydrated into memory before we knew whose it was.
+      if (wiped && cold) queryClient.clear();
+    });
+  }, [isReady, userId]);
 
   const runExclusive = useCallback(async <T,>(request: () => Promise<T>): Promise<T> => {
     if (requestInFlight.current) throw new Error("An authentication request is already in progress.");
