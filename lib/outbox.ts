@@ -18,6 +18,7 @@
 //    but other chats and posts keep flowing.
 //  - Message inserts carry a client-generated id, so retrying after a timed-out-but-successful
 //    insert is a no-op rather than a duplicate.
+import { Alert } from "react-native";
 import { Directory, File, Paths } from "expo-file-system";
 import { adoptAudioFile } from "./audio-cache";
 import { safeDb } from "./sqlite";
@@ -27,8 +28,9 @@ import { cacheMessages } from "./local-cache";
 import { isCurrentlyOffline } from "./network";
 import { makeUuid } from "./uuid";
 import type { Message } from "@/features/messaging/api";
+import type { Comment, Stance } from "@/features/feed/types";
 
-export type OutboxKind = "text" | "post" | "voice";
+export type OutboxKind = "text" | "post" | "voice" | "reaction" | "comment";
 type OutboxMessagePayload = { content: string; senderId: string; replyToMessageId?: string | null; serverId?: string };
 // Mirrors the body useCreatePost (features/compose/api.ts) sends to the
 // create-post/create-page-post Edge Functions — replaying a queued post goes
@@ -43,6 +45,13 @@ export type OutboxPostPayload = { heading?: string; heading_color?: string | nul
 // directory (the recorder's own file lives in the cache dir, which the OS may purge before we
 // reconnect); it is uploaded to storage and deleted once the message row is created.
 export type OutboxVoicePayload = { senderId: string; localUri: string; contentType: string; durationSec: number; peaks?: number[]; viewOnce?: boolean; replyToMessageId?: string | null; serverId?: string };
+// A like/dislike on a post or comment made offline. It stores the state the person *wants*, not a
+// toggle, so replaying it is idempotent, and `key` names the (target, type, acting identity) it is
+// about: queuing again replaces the earlier row, so only the last tap survives.
+export type OutboxReactionPayload = { key: string; target: "post" | "comment"; targetId: string; type: "like" | "dislike"; desired: boolean; pageId: string | null; postId: string };
+// A comment or reply written offline. `clientRequestId` is sent on every attempt; create-comment
+// returns the existing comment for a repeat of (author, key), so a retry can't post it twice.
+export type OutboxCommentPayload = { postId: string; content: string; stance?: Stance; parentCommentId?: string; clientRequestId: string };
 export type OutboxStatus = "pending" | "failed";
 type OutboxRow = {
   local_id: string; kind: OutboxKind; conversation_id: string | null; payload: string; created_at: string;
@@ -141,6 +150,33 @@ export async function enqueueOutboxPost(localId: string, payload: OutboxPostPayl
   emitOutboxChange();
 }
 
+export function reactionKey(target: "post" | "comment", targetId: string, type: "like" | "dislike", pageId: string | null) {
+  return `${target}:${targetId}:${type}:${pageId ?? "-"}`;
+}
+
+export async function enqueueOutboxReaction(userId: string, payload: OutboxReactionPayload) {
+  await safeDb(async (db) => {
+    // Collapse: the newest tap on the same target replaces any older queued one (pending or
+    // dead-lettered), so a like-unlike-like sequence sends once and can't fail on a stale row.
+    await db.runAsync("DELETE FROM outbox WHERE user_id = ? AND kind = 'reaction' AND json_extract(payload, '$.key') = ?;", [userId, payload.key]);
+    await db.runAsync(
+      "INSERT INTO outbox (local_id, kind, conversation_id, payload, created_at, attempts, user_id, status, next_attempt_at) VALUES (?, 'reaction', NULL, ?, ?, 0, ?, 'pending', 0);",
+      [`ako-local-reaction:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`, JSON.stringify(payload), new Date().toISOString(), userId]
+    );
+  });
+  emitOutboxChange();
+}
+
+export async function enqueueOutboxComment(localId: string, userId: string, payload: OutboxCommentPayload) {
+  await safeDb((db) =>
+    db.runAsync(
+      "INSERT INTO outbox (local_id, kind, conversation_id, payload, created_at, attempts, user_id, status, next_attempt_at) VALUES (?, 'comment', NULL, ?, ?, 0, ?, 'pending', 0);",
+      [localId, JSON.stringify(payload), new Date().toISOString(), userId]
+    )
+  );
+  emitOutboxChange();
+}
+
 /** Copies a fresh recording somewhere the OS won't clear, so it survives until we're back online. */
 export function persistOutboxAudio(uri: string): string {
   const dir = new Directory(Paths.document, "outbox-audio");
@@ -168,6 +204,14 @@ export function isLocalMessageId(id: string) {
 
 export function makeLocalMessageId() {
   return `ako-local:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function isLocalCommentId(id: string) {
+  return id.startsWith("ako-local-comment:");
+}
+
+export function makeLocalCommentId() {
+  return `ako-local-comment:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function isLocalPostId(id: string) {
@@ -212,12 +256,19 @@ async function flushPass(): Promise<void> {
     try {
       if (row.kind === "post") await flushOutboxPost(row);
       else if (row.kind === "voice") await flushOutboxVoice(row);
+      else if (row.kind === "reaction") await flushOutboxReaction(row);
+      else if (row.kind === "comment") await flushOutboxComment(row);
       else await flushOutboxMessage(row);
       await safeDb((db) => db.runAsync("DELETE FROM outbox WHERE local_id = ?;", [row.local_id]));
       emitOutboxChange();
     } catch (error) {
       if (isPermanentOutboxError(error)) {
-        await markFailed(row, error);
+        // A reaction that can't be applied (the post or comment is gone, or was blocked) has nothing
+        // useful to retry or show: drop it and let the screen re-read the server's truth. A rejected
+        // comment tells the person why. Everything else waits for Retry/Discard.
+        if (row.kind === "reaction") await dropRejectedReaction(row);
+        else if (row.kind === "comment") await dropRejectedComment(row, error);
+        else await markFailed(row, error);
       } else if (await isCurrentlyOffline()) {
         return; // network is down: leave every remaining row untouched (no attempt burned); reconnect/foreground/timer will retry
       } else {
@@ -305,6 +356,82 @@ async function flushOutboxVoice(row: OutboxRow) {
 function isDuplicateUpload(error: unknown): boolean {
   const e = error as { statusCode?: unknown; message?: unknown } | null;
   return String(e?.statusCode) === "409" || /already exists|duplicate/i.test(String(e?.message ?? ""));
+}
+
+function invalidateReactionQueries(payload: OutboxReactionPayload) {
+  if (payload.target === "post") {
+    void queryClient.invalidateQueries({ queryKey: ["reaction", payload.targetId] });
+    void queryClient.invalidateQueries({ queryKey: ["feed"] });
+    void queryClient.invalidateQueries({ queryKey: ["post", payload.targetId] });
+  } else {
+    void queryClient.invalidateQueries({ queryKey: ["comment-reaction", payload.targetId] });
+    void queryClient.invalidateQueries({ queryKey: ["comments", payload.postId] });
+  }
+}
+
+async function flushOutboxReaction(row: OutboxRow) {
+  const payload = JSON.parse(row.payload) as OutboxReactionPayload;
+  const userId = row.user_id!;
+  const column = payload.target === "post" ? "post_id" : "comment_id";
+  const actor = <T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(query: T): T =>
+    payload.pageId ? query.eq("acted_as_page_id", payload.pageId) : query.is("acted_as_page_id", null);
+
+  if (!payload.desired) {
+    const { error } = await actor(supabase.from("reactions").delete().eq(column, payload.targetId).eq("user_id", userId).eq("type", payload.type).eq("target_type", payload.target));
+    if (error) throw error;
+  } else {
+    if (payload.target === "comment") {
+      // A like and a dislike from the same actor can't coexist (same rule as useToggleCommentReaction).
+      const opposite = payload.type === "like" ? "dislike" : "like";
+      const { error: clearError } = await actor(supabase.from("reactions").delete().eq("comment_id", payload.targetId).eq("user_id", userId).eq("type", opposite).eq("target_type", "comment"));
+      if (clearError) throw clearError;
+    }
+    const { error } = await supabase.from("reactions").insert({ [column]: payload.targetId, user_id: userId, type: payload.type, target_type: payload.target, acted_as_page_id: payload.pageId });
+    if (error && error.code !== "23505") throw error; // already there: an earlier attempt landed
+  }
+  invalidateReactionQueries(payload);
+}
+
+async function dropRejectedReaction(row: OutboxRow) {
+  await safeDb((db) => db.runAsync("DELETE FROM outbox WHERE local_id = ?;", [row.local_id]));
+  try { invalidateReactionQueries(JSON.parse(row.payload) as OutboxReactionPayload); } catch { /* unreadable payload: nothing to refresh */ }
+  emitOutboxChange();
+}
+
+async function flushOutboxComment(row: OutboxRow) {
+  const payload = JSON.parse(row.payload) as OutboxCommentPayload;
+  const { data, error } = await supabase.functions.invoke("create-comment", {
+    body: { post_id: payload.postId, content: payload.content, stance: payload.stance, parent_comment_id: payload.parentCommentId, client_request_id: payload.clientRequestId },
+  });
+  if (error) throw error;
+  if (data?.error) throw new OutboxPermanentError(String(data.error));
+  // The comment exists now; nothing below may throw or a retry would go out (the key would dedupe it, but no need to risk it).
+  void queryClient.invalidateQueries({ queryKey: ["comments", payload.postId] });
+  void queryClient.invalidateQueries({ queryKey: ["feed"] });
+  void queryClient.invalidateQueries({ queryKey: ["post", payload.postId] });
+}
+
+async function serverErrorMessage(error: unknown): Promise<string | null> {
+  try {
+    const response = (error as { context?: Response } | null)?.context;
+    const body = response && typeof response.json === "function" ? await response.json() : null;
+    return typeof body?.error === "string" ? body.error : null;
+  } catch {
+    return null;
+  }
+}
+
+async function dropRejectedComment(row: OutboxRow, error: unknown) {
+  await safeDb((db) => db.runAsync("DELETE FROM outbox WHERE local_id = ?;", [row.local_id]));
+  try {
+    const payload = JSON.parse(row.payload) as OutboxCommentPayload;
+    const withoutPlaceholder = (old: Comment[] | undefined) => old?.filter((comment) => comment.id !== row.local_id);
+    queryClient.setQueryData<Comment[]>(["comments", payload.postId], withoutPlaceholder);
+    if (payload.parentCommentId) queryClient.setQueryData<Comment[]>(["comments", payload.postId, "replies", payload.parentCommentId], withoutPlaceholder);
+  } catch { /* unreadable payload: the placeholder disappears on the next refetch */ }
+  emitOutboxChange();
+  const reason = error instanceof OutboxPermanentError ? error.message : (await serverErrorMessage(error)) ?? "It couldn't be posted.";
+  Alert.alert("Your comment wasn't posted", reason);
 }
 
 async function flushOutboxPost(row: OutboxRow) {
