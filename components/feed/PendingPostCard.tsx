@@ -17,7 +17,7 @@ export function PendingPostCard({ post }: { post: PendingPost }) {
   const { isOffline } = useNetworkStatus();
   const failed = post.status === "failed";
   const { payload } = post;
-  const mediaCount = payload.media_urls?.length ?? 0;
+  const mediaCount = (payload.media_urls?.length ?? 0) + (payload.local_media?.length ?? 0);
 
   const confirmDiscard = () =>
     Alert.alert("Discard this post?", "It hasn't been published yet and will be deleted from this device.", [

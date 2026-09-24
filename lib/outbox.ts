@@ -27,6 +27,7 @@ import { queryClient } from "./query-client";
 import { cacheMessages } from "./local-cache";
 import { isCurrentlyOffline } from "./network";
 import { makeUuid } from "./uuid";
+import { postImageExtension, uploadPostImage, validatePostImage } from "./post-media";
 import type { Message } from "@/features/messaging/api";
 import type { Comment, Stance } from "@/features/feed/types";
 
@@ -40,7 +41,13 @@ export type OutboxPostPayload = { heading?: string; heading_color?: string | nul
   // Idempotency key. Sent on every attempt; create-post / create-page-post return the existing post for a
   // repeat of the same (user, key) instead of publishing again. Generated at enqueue, or on first flush for
   // rows queued by older builds.
-  client_request_id?: string };
+  client_request_id?: string;
+  // Photos picked while offline: durable copies under the app's document directory (picker cache URIs
+  // can be purged before we reconnect) still waiting to be uploaded. Each one is uploaded on flush, its
+  // public URL is appended to media_urls and the entry removed — persisted after every upload so a
+  // retry never uploads it again — and only then is the post itself created. Never sent to create-post.
+  local_media?: OutboxLocalMedia[] };
+export type OutboxLocalMedia = { uri: string; mimeType: string; fileName?: string | null };
 // A voice note recorded offline. `localUri` is a copy of the recording under the app's document
 // directory (the recorder's own file lives in the cache dir, which the OS may purge before we
 // reconnect); it is uploaded to storage and deleted once the message row is created.
@@ -185,6 +192,23 @@ export function persistOutboxAudio(uri: string): string {
   const destination = new File(dir, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`);
   new File(uri).copy(destination);
   return destination.uri;
+}
+
+/** Copies a picked image somewhere durable and returns the copy (see OutboxPostPayload.local_media). */
+export function persistOutboxImage(asset: { uri: string; mimeType?: string | null; fileName?: string | null }): OutboxLocalMedia {
+  const dir = new Directory(Paths.document, "outbox-media");
+  if (!dir.exists) dir.create({ intermediates: true });
+  const extension = (asset.fileName?.split(".").pop() || asset.uri.split("?")[0].split(".").pop() || "jpg").toLowerCase();
+  const destination = new File(dir, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`);
+  new File(asset.uri).copy(destination);
+  return { uri: destination.uri, mimeType: asset.mimeType ?? "image/jpeg", fileName: asset.fileName ?? null };
+}
+
+/** Best-effort removal of queued-photo copies (after upload, or when the post is discarded). */
+export function deleteOutboxMedia(items: readonly OutboxLocalMedia[] | undefined): void {
+  for (const item of items ?? []) {
+    try { const file = new File(item.uri); if (file.exists) file.delete(); } catch { /* best-effort cleanup */ }
+  }
 }
 
 export async function enqueueOutboxVoice(localId: string, conversationId: string, payload: OutboxVoicePayload) {
@@ -442,7 +466,25 @@ async function flushOutboxPost(row: OutboxRow) {
     parsed.client_request_id = makeUuid();
     await safeDb((db) => db.runAsync("UPDATE outbox SET payload = ? WHERE local_id = ?;", [JSON.stringify(parsed), row.local_id]));
   }
-  const { posted_as_page_id, ...body } = parsed;
+  // Phase 1: upload photos taken offline, one at a time, saving progress after each so a retry resumes.
+  while (parsed.local_media?.length) {
+    const item = parsed.local_media[0];
+    const file = new File(item.uri);
+    if (!file.exists) throw new OutboxPermanentError("A photo attached to this post is no longer on this device.");
+    const asset = { uri: item.uri, mimeType: item.mimeType, fileName: item.fileName, fileSize: file.size };
+    try { validatePostImage(asset); } catch (error) { throw new OutboxPermanentError(describeError(error)); }
+    // The name is fixed by the post's idempotency key and the photo's slot, so a retry after a lost
+    // response re-finds the object instead of uploading a second copy.
+    const path = `${row.user_id}/${parsed.client_request_id}-${parsed.media_urls.length}.${postImageExtension(asset)}`;
+    const url = await uploadPostImage(row.user_id!, asset, { path });
+    parsed.media_urls = [...parsed.media_urls, url];
+    parsed.local_media = parsed.local_media.slice(1);
+    await safeDb((db) => db.runAsync("UPDATE outbox SET payload = ? WHERE local_id = ?;", [JSON.stringify(parsed), row.local_id]));
+    deleteOutboxMedia([item]);
+  }
+  // Phase 2: create the post. local_media is an outbox-only field and never goes to the function.
+  const { posted_as_page_id, local_media: _uploaded, ...body } = parsed;
+  void _uploaded;
   const { data, error } = posted_as_page_id
     ? await supabase.functions.invoke("create-page-post", { body: { ...body, page_id: posted_as_page_id } })
     : await supabase.functions.invoke("create-post", { body });
@@ -525,6 +567,9 @@ export async function discardOutboxItem(localId: string): Promise<void> {
   if (!row) return;
   if (row.kind === "voice") {
     try { const { localUri } = JSON.parse(row.payload) as OutboxVoicePayload; const file = new File(localUri); if (file.exists) file.delete(); } catch { /* best-effort cleanup */ }
+  }
+  if (row.kind === "post") {
+    try { deleteOutboxMedia((JSON.parse(row.payload) as OutboxPostPayload).local_media); } catch { /* unreadable payload: nothing to clean */ }
   }
   await safeDb((db) => db.runAsync("DELETE FROM outbox WHERE local_id = ?;", [localId]));
   if (row.conversation_id) {
