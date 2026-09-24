@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Platform, StyleSheet, Switch, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Icon, type IconName } from "@/components/core/Icon";
 import { useQueryClient } from "@tanstack/react-query";
@@ -162,7 +162,7 @@ function BiometricLockSettings() {
   const setting = useBiometricLockSetting();
   if (capability.loading || setting.loading) return null;
   if (!capability.supported) return null; // no point offering the toggle on hardware that can't do it
-  return <ToggleRow icon="scan-face" title={`Require ${capability.label}`} description={capability.enrolled ? `Lock Akọ behind ${capability.label} whenever you return to the app.` : `Set up ${capability.label} in your device settings first.`} checked={setting.enabled} pending={false} onToggle={() => void setting.setEnabled(!setting.enabled)} error={setting.enabled && !capability.enrolled ? `${capability.label} isn't set up on this device yet — this will stay off until it is.` : null} />;
+  return <ToggleRow icon="scan-face" title={`Require ${capability.label}`} description={capability.enrolled ? `Lock Akọ behind ${capability.label} whenever you return to the app.${Platform.OS === "android" ? " While this is on, screenshots, screen recording and the recent-apps preview are blocked." : ""}` : `Set up ${capability.label} in your device settings first.`} checked={setting.enabled} pending={false} onToggle={() => void setting.setEnabled(!setting.enabled)} error={setting.enabled && !capability.enrolled ? `${capability.label} isn't set up on this device yet — this will stay off until it is.` : null} />;
 }
 
 function PrivacySettings({ profile }: { profile: any }) {

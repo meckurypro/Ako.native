@@ -13,7 +13,18 @@ const BIOMETRIC_LOCK_ENABLED_KEY = "ako-biometric-lock-enabled";
 // switcher snapshot the first time the app is backgrounded after turning the lock on) instead of
 // waiting for the next foreground to re-read SecureStore. null = not loaded yet.
 let lockEnabledMirror: boolean | null = null;
+const mirrorListeners = new Set<() => void>();
+function setLockEnabledMirror(value: boolean) {
+  if (lockEnabledMirror === value) return;
+  lockEnabledMirror = value;
+  mirrorListeners.forEach((listener) => listener());
+}
 export function getBiometricLockEnabledSync(): boolean | null { return lockEnabledMirror; }
+/** For useSyncExternalStore: lets the lock gate re-render the moment the setting changes, not on the next foreground. */
+export function subscribeBiometricLockEnabled(listener: () => void): () => void {
+  mirrorListeners.add(listener);
+  return () => { mirrorListeners.delete(listener); };
+}
 
 export type BiometricLabel = "Face ID" | "Fingerprint" | "Biometric unlock";
 
@@ -52,7 +63,7 @@ export function useBiometricLockSetting() {
   }, []);
   const setEnabled = useCallback(async (value: boolean) => {
     setEnabledState(value);
-    lockEnabledMirror = value;
+    setLockEnabledMirror(value);
     await SecureStore.setItemAsync(BIOMETRIC_LOCK_ENABLED_KEY, String(value));
   }, []);
   return { enabled, setEnabled, loading };
@@ -61,7 +72,7 @@ export function useBiometricLockSetting() {
 /** One synchronous-from-the-caller's-perspective read of the setting, for the lock gate's initial mount — see providers/BiometricLockGate.tsx. */
 export async function readBiometricLockEnabled(): Promise<boolean> {
   const value = (await SecureStore.getItemAsync(BIOMETRIC_LOCK_ENABLED_KEY)) === "true";
-  lockEnabledMirror = value;
+  setLockEnabledMirror(value);
   return value;
 }
 

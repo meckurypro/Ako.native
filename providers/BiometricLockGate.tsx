@@ -1,9 +1,10 @@
 // File: providers/BiometricLockGate.tsx
-import { type PropsWithChildren, useEffect, useRef, useState } from "react";
-import { AppState, type AppStateStatus } from "react-native";
+import { type PropsWithChildren, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AppState, type AppStateStatus, Platform } from "react-native";
+import { allowScreenCaptureAsync, preventScreenCaptureAsync } from "expo-screen-capture";
 import { BiometricLockScreen } from "@/components/security/BiometricLockScreen";
 import { PrivacyCover } from "@/components/security/PrivacyCover";
-import { getBiometricLockEnabledSync, readBiometricLockEnabled, useBiometricCapability } from "@/features/security/biometric";
+import { getBiometricLockEnabledSync, readBiometricLockEnabled, subscribeBiometricLockEnabled, useBiometricCapability } from "@/features/security/biometric";
 import { useAuth } from "./AuthProvider";
 
 // A brief grace period after backgrounding, so switching to the OS app
@@ -12,6 +13,9 @@ import { useAuth } from "./AuthProvider";
 // having been away relocks. Matches the general feel of WhatsApp/Instagram's
 // own app-lock rather than relocking on every single frame in the background.
 const GRACE_PERIOD_MS = 15_000;
+
+// Owner key for the Android screen-capture block, so nothing else that toggles it can clear ours.
+const SCREEN_CAPTURE_KEY = "ako-app-lock";
 
 export function BiometricLockGate({ children }: PropsWithChildren) {
   const { session, isReady } = useAuth();
@@ -89,12 +93,24 @@ export function BiometricLockGate({ children }: PropsWithChildren) {
   const showLock = locked === true && !!session;
   // Opaque cover: while the lock decision is still unknown, and (with app-lock on) whenever the app is
   // inactive/backgrounded so the app-switcher snapshot doesn't capture conversations. It also flashes
-  // briefly behind the Face ID prompt and permission dialogs, which is expected. Android takes its
-  // recents snapshot before `background` fires; blocking that needs FLAG_SECURE (expo-screen-capture).
+  // briefly behind the Face ID prompt and permission dialogs, which is expected.
   // The synchronous mirror wins over the state copy, which only refreshes on foreground: turning the
-  // lock on (or off) in Settings applies to the very next time the app is backgrounded.
-  const lockOn = (getBiometricLockEnabledSync() ?? lockActive) && canLock;
+  // lock on (or off) in Settings applies immediately, because the gate subscribes to it.
+  const lockMirror = useSyncExternalStore(subscribeBiometricLockEnabled, getBiometricLockEnabledSync);
+  const lockOn = (lockMirror ?? lockActive) && canLock;
   const showCover = !ready || locked === null || (obscured && lockOn && !!session);
+
+  // Android takes the recents snapshot *before* `background` fires, so a JS-side cover can't beat it.
+  // The only lever is FLAG_SECURE, which also blocks screenshots and screen recording for the whole
+  // window, so it is applied only while the person has asked for app-lock and is signed in (the
+  // Settings caption says so), and released the moment either stops being true. iOS is covered by the
+  // PrivacyCover above.
+  const protectRecents = Platform.OS === "android" && lockOn && !!session;
+  useEffect(() => {
+    if (!protectRecents) return;
+    void preventScreenCaptureAsync(SCREEN_CAPTURE_KEY).catch(() => {});
+    return () => { void allowScreenCaptureAsync(SCREEN_CAPTURE_KEY).catch(() => {}); };
+  }, [protectRecents]);
 
   return (
     <>
