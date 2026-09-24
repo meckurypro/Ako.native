@@ -37,7 +37,7 @@ export type OutboxPostPayload = { heading?: string; heading_color?: string | nul
 // A voice note recorded offline. `localUri` is a copy of the recording under the app's document
 // directory (the recorder's own file lives in the cache dir, which the OS may purge before we
 // reconnect); it is uploaded to storage and deleted once the message row is created.
-export type OutboxVoicePayload = { senderId: string; localUri: string; contentType: string; durationSec: number; peaks?: number[]; viewOnce?: boolean; serverId?: string };
+export type OutboxVoicePayload = { senderId: string; localUri: string; contentType: string; durationSec: number; peaks?: number[]; viewOnce?: boolean; replyToMessageId?: string | null; serverId?: string };
 export type OutboxStatus = "pending" | "failed";
 type OutboxRow = {
   local_id: string; kind: OutboxKind; conversation_id: string | null; payload: string; created_at: string;
@@ -287,7 +287,7 @@ async function flushOutboxVoice(row: OutboxRow) {
   // Imported lazily: features/messaging/api imports this module, so a top-level import would be a cycle.
   const { encodeVoiceNote } = await import("@/features/messaging/api");
   const content = encodeVoiceNote({ path, durationSec: payload.durationSec, peaks: payload.peaks, viewOnce: payload.viewOnce });
-  const { message, alreadySent } = await insertMessageOnce({ id, conversation_id: conversationId, sender_id: payload.senderId, content });
+  const { message, alreadySent } = await insertMessageOnce({ id, conversation_id: conversationId, sender_id: payload.senderId, content, reply_to_message_id: payload.replyToMessageId ?? null });
   await supabase.from("conversation_participants").update({ is_request: false, archived_at: null }).eq("conversation_id", conversationId).eq("user_id", payload.senderId);
   reconcileLocalMessage(conversationId, row.local_id, message, !alreadySent);
   try { file.delete(); } catch { /* best-effort cleanup */ }
@@ -306,7 +306,9 @@ async function flushOutboxPost(row: OutboxRow) {
   if (error) throw error;
   // The function answered but refused the post (validation, moderation, limits): retrying can't help.
   if (data?.error) throw new OutboxPermanentError(String(data.error));
-  reconcileLocalPost(row.local_id);
+  // The post exists now. Nothing after this line may throw: a throw here would be classified as a
+  // failed send and retried, publishing the post twice.
+  await reconcileLocalPost(row.local_id);
 }
 
 async function countRows(where: string, params: (string | number)[] = []): Promise<number> {
@@ -400,13 +402,21 @@ function reconcileLocalMessage(conversationId: string, localId: string, serverMe
   if (notify) void supabase.functions.invoke("send-message-push", { body: { message_id: serverMessage.id } }).catch((error) => console.warn("send-message-push failed", error));
 }
 
-function reconcileLocalPost(localId: string) {
-  // Feed pages are keyed by post id and read from the server on the next
-  // fetch anyway (unlike messages there's no single small query key to patch
-  // in place across every feed variant) — simplest correct fix is dropping
-  // the local placeholder and letting the normal feed/identity-posts queries
-  // refetch, matching useCreatePost's own onSuccess invalidation.
-  void queryClient.invalidateQueries({ queryKey: ["feed"] });
-  void queryClient.invalidateQueries({ queryKey: ["identity-posts"] });
+// How long a just-sent post's placeholder may wait for the feed to refetch before the queue moves on.
+const FEED_SETTLE_TIMEOUT_MS = 8_000;
+
+async function reconcileLocalPost(localId: string): Promise<void> {
+  // Feed pages are keyed by post id and read from the server on the next fetch anyway (unlike messages
+  // there's no single small query key to patch in place across every feed variant). So drop the
+  // placeholder by refetching, matching useCreatePost's own onSuccess invalidation. The outbox row (which
+  // is what renders the placeholder) is deleted only after this returns, so the card stays until the real
+  // post has landed in the feed rather than vanishing for a beat first.
+  try {
+    const refetch = Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ["feed"] }),
+      queryClient.invalidateQueries({ queryKey: ["identity-posts"] }),
+    ]);
+    await Promise.race([refetch, new Promise((resolve) => setTimeout(resolve, FEED_SETTLE_TIMEOUT_MS))]);
+  } catch { /* the post is already sent; a failed refetch only means the feed catches up on its next fetch */ }
   if (__DEV__) console.log(`[outbox] flushed queued post ${localId}`);
 }
