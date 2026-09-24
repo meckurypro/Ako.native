@@ -70,7 +70,21 @@ export function usePushRegistration() {
     return () => sub.remove();
   }, [user?.id]);
 
-  // Tapping a notification while the app is backgrounded/closed deep-links into the
+  // Cold start: the listener below only sees taps that happen while the app process is alive, so a
+  // notification that *launched* the app from closed has to be read back once, after sign-in
+  // (navigating any earlier would race the root layout mounting).
+  const handledColdStart = useRef(false);
+  useEffect(() => {
+    if (!user || handledColdStart.current) return;
+    handledColdStart.current = true;
+    const response = Notifications.getLastNotificationResponse();
+    const data = response?.notification.request.content.data as { conversationId?: string } | undefined;
+    if (!data?.conversationId) return;
+    Notifications.clearLastNotificationResponse();
+    router.push({ pathname: "/messages/[conversationId]", params: { conversationId: data.conversationId } });
+  }, [user, router]);
+
+  // Tapping a notification while the app is running (foreground or backgrounded) deep-links into the
   // conversation it was about, matching what tapping the same message would do in-app.
   const routerRef = useRef(router);
   routerRef.current = router;

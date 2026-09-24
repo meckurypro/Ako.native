@@ -47,7 +47,8 @@ export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce, openedO
   useEffect(() => {
     if (spent) return; // already consumed (possibly from a prior session) — no need to sign a URL that will never play
     let alive = true;
-    getSignedAudioUrl(path).then(signedUrl => {
+    // A voice note still waiting in the offline outbox has a local file path instead of a storage path.
+    (path.startsWith("file:") ? Promise.resolve(path) : getSignedAudioUrl(path)).then(signedUrl => {
       if (!alive) return;
       if (!signedUrl) { setFailed(true); return; }
       setUrl(signedUrl);

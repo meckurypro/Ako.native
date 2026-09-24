@@ -56,8 +56,9 @@ const handlers: Record<PermissionKind, Handler> = {
     rationaleTitle: "Allow calendar access",
     rationaleBody: "AKọ accesses your calendar only when you choose to add an event to it.",
     blockedBody: "Calendar access is off for AKọ. Turn it on in Settings to add events to your calendar.",
-    get: () => Calendar.getCalendarPermissionsAsync(),
-    request: () => Calendar.requestCalendarPermissionsAsync(),
+    // The *Async permission helpers are throwing stubs in expo-calendar SDK 57; use the object API's.
+    get: () => Calendar.getCalendarPermissions(),
+    request: () => Calendar.requestCalendarPermissions(),
   },
 };
 

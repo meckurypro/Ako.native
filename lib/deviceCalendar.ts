@@ -22,18 +22,20 @@ export type DeviceCalendarEvent = {
 
 // iOS exposes a single "default calendar" directly. Android has no such
 // concept — we have to list calendars and pick a writable one ourselves.
-async function resolveWritableCalendarId(): Promise<string | null> {
+// expo-calendar SDK 57 moved to an object API: the old *Async helpers
+// (getDefaultCalendarAsync, getCalendarsAsync, createEventAsync) are kept only as
+// stubs that throw, so this uses ExpoCalendar instances and calendar.createEvent().
+async function resolveWritableCalendar(): Promise<Calendar.ExpoCalendar | null> {
   if (Platform.OS === "ios") {
     try {
-      const defaultCalendar = await Calendar.getDefaultCalendarAsync();
-      return defaultCalendar?.id ?? null;
+      return Calendar.getDefaultCalendarSync();
     } catch {
       return null;
     }
   }
-  const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-  const writable = calendars.find(cal => cal.allowsModifications) ?? calendars[0];
-  return writable?.id ?? null;
+  const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
+  const writable = calendars.filter(cal => cal.allowsModifications);
+  return writable.find(cal => cal.isPrimary) ?? writable[0] ?? null;
 }
 
 /**
@@ -47,14 +49,14 @@ export async function addEventToDeviceCalendar(event: DeviceCalendarEvent): Prom
   const granted = await ensurePermission("calendar");
   if (!granted) return false;
 
-  const calendarId = await resolveWritableCalendarId();
-  if (!calendarId) return false;
+  const calendar = await resolveWritableCalendar().catch(() => null);
+  if (!calendar) return false;
 
   const start = new Date(event.startIso);
   const end = new Date(start.getTime() + (event.durationHours ?? 2) * 60 * 60 * 1000);
 
   try {
-    await Calendar.createEventAsync(calendarId, {
+    await calendar.createEvent({
       title: event.title,
       notes: event.description ?? undefined,
       location: event.location,
