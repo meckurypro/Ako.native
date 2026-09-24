@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { AppState } from "react-native";
+import type { Query } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -8,7 +10,7 @@ import { NetworkProvider, onNetworkReconnect } from "@/lib/network";
 import { flushOutbox } from "@/lib/outbox";
 import { primeVoicePlaybackPositions } from "@/features/messaging/voicePlaybackPosition";
 import { usePushRegistration } from "@/features/notifications/push";
-import { AuthProvider } from "./AuthProvider";
+import { AuthProvider, useAuth } from "./AuthProvider";
 import { ThemeProvider } from "./ThemeProvider";
 import type { PropsWithChildren } from "react";
 
@@ -21,13 +23,34 @@ primeVoicePlaybackPositions();
 const PERSIST_BUSTER = "v1";
 const persister = createSQLitePersister();
 
-// Drains the offline outbox on every reconnect, plus once at startup in case
-// messages were queued in a previous session that never came back online.
+// Only these query roots are written to disk. The persisted cache is plaintext SQLite, so it holds
+// what makes cold starts and offline browsing feel instant (feed, conversation list, profiles) and
+// nothing financial or activity-level. Messages live in messages_cache instead, so the
+// "mobile-messages" query is deliberately absent, as are wallet and notification queries.
+const PERSISTED_QUERY_ROOTS = new Set(["feed", "identity-posts", "post", "mobile-conversations", "profile", "own-profile", "my-profile"]);
+const dehydrateOptions = {
+  shouldDehydrateQuery: (query: Query) => query.state.status === "success" && PERSISTED_QUERY_ROOTS.has(String(query.queryKey[0])),
+};
+
+// How often to retry while the app is open, so a row that is backing off (or a flush that raced a
+// flaky connection) doesn't sit until the next reconnect or foreground.
+const OUTBOX_POLL_MS = 60_000;
+
+// Drains the offline outbox. Triggers: a user becoming available (sign-in, cold start once the
+// session restores — an unconditional flush at mount ran before the session existed and found
+// nothing it could send), the app returning to the foreground, every network reconnect, and a
+// slow timer while the app is in the foreground. Overlapping requests are coalesced in flushOutbox.
 function OutboxSync() {
+  const { user } = useAuth();
+  const userId = user?.id;
   useEffect(() => {
+    if (!userId) return;
     void flushOutbox();
-    return onNetworkReconnect(() => void flushOutbox());
-  }, []);
+    const unsubscribeReconnect = onNetworkReconnect(() => void flushOutbox());
+    const appStateSub = AppState.addEventListener("change", (state) => { if (state === "active") void flushOutbox(); });
+    const timer = setInterval(() => { if (AppState.currentState === "active") void flushOutbox(); }, OUTBOX_POLL_MS);
+    return () => { unsubscribeReconnect(); appStateSub.remove(); clearInterval(timer); };
+  }, [userId]);
   return null;
 }
 
@@ -45,7 +68,7 @@ export function AppProviders({ children }: PropsWithChildren) {
       <SafeAreaProvider>
         <PersistQueryClientProvider
           client={queryClient}
-          persistOptions={{ persister, maxAge: QUERY_CACHE_MAX_AGE, buster: PERSIST_BUSTER }}
+          persistOptions={{ persister, maxAge: QUERY_CACHE_MAX_AGE, buster: PERSIST_BUSTER, dehydrateOptions }}
         >
           <NetworkProvider>
             <ThemeProvider>
