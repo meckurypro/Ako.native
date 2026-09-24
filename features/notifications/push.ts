@@ -11,6 +11,7 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import { isNotificationsOptedOut } from "./settings";
 
 // Foreground notifications still show a banner/sound — without this handler
 // Expo suppresses them entirely while the app is open.
@@ -25,6 +26,7 @@ Notifications.setNotificationHandler({
 
 async function registerToken(userId: string) {
   if (Platform.OS === "web") return; // push_tokens.platform is constrained to ios/android; no push support on web anyway
+  if (await isNotificationsOptedOut()) return; // explicit "off" from Settings (features/notifications/settings.ts) — don't silently re-register
   try {
     const existing = await Notifications.getPermissionsAsync();
     let status = existing.status;

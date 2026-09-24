@@ -1,6 +1,6 @@
 // File: app/projects/[projectId].tsx
 import { useEffect, useState } from "react";
-import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Avatar, Icon, PressableScale, Screen, Text, VerifiedBadge, type IconName } from "@/components/core";
 import { ErrorState, Skeleton } from "@/components/feedback";
@@ -10,6 +10,7 @@ import { ProjectMiniCard, ProjectRail } from "@/components/projects/ProjectMiniC
 import {
   PROJECT_TYPE_LABELS, useEventDetails, useGigDetails, useGigWorkSamples, useGigsFeaturingProject, useMarkProjectSeen, useMeetingDetails, useProjectDetail, useSimilarProjects,
 } from "@/features/projects/api";
+import { addEventToDeviceCalendar } from "@/lib/deviceCalendar";
 import { useTheme } from "@/providers/ThemeProvider";
 import { fonts } from "@/theme/fonts";
 
@@ -36,7 +37,10 @@ function formatCountdown(ms: number) {
   return `${m}m ${sec}s`;
 }
 
-// Native has no calendar module yet, so "Add to calendar" opens a prefilled Google Calendar event (web downloads an .ics file instead).
+// Fallback only: opens a prefilled Google Calendar event in the browser.
+// addEventToDeviceCalendar() (lib/deviceCalendar.ts) is the primary path now
+// — this only runs if the user declines/blocks the calendar permission or
+// the device has no writable calendar (web downloads an .ics file instead).
 function calendarUrl(event: { title: string; description?: string | null; location?: string; startIso: string }) {
   const start = new Date(event.startIso);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -76,6 +80,11 @@ export default function ProjectDetailScreen() {
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace("/(tabs)/home"));
   const openUrl = (url: string) => void Linking.openURL(url).catch(() => undefined);
+  const addToCalendar = async (event: { title: string; description?: string | null; location?: string; startIso: string }) => {
+    const added = await addEventToDeviceCalendar(event);
+    if (added) Alert.alert("Added to calendar", "This event is now on your device calendar.");
+    else openUrl(calendarUrl(event)); // permission declined/blocked, or no writable calendar — same fallback as before
+  };
   const page = project?.posted_as_page ?? null;
   const openCreator = () => {
     if (!project) return;
@@ -114,7 +123,7 @@ export default function ProjectDetailScreen() {
               <InfoLine icon="map-pin">{eventDetails.location_type === "physical" ? eventDetails.location_value : "Online"}</InfoLine>
               {eventDetails.event_date && countdown !== null && countdown > 0 ? <Text variant="label" color="accent">Starts in {formatCountdown(countdown)}</Text> : null}
               <View style={s.actionsRow}>
-                {eventDetails.event_date ? <LinkAction icon="calendar-plus" label="Add to calendar" onPress={() => openUrl(calendarUrl({ title: project.title, description: project.description, location: eventDetails.location_value || undefined, startIso: eventDetails.event_date! }))} /> : null}
+                {eventDetails.event_date ? <LinkAction icon="calendar-plus" label="Add to calendar" onPress={() => void addToCalendar({ title: project.title, description: project.description, location: eventDetails.location_value || undefined, startIso: eventDetails.event_date! })} /> : null}
                 {eventDetails.location_type === "physical" && eventDetails.location_value ? <LinkAction icon="navigation" label="Directions" onPress={() => openUrl(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(eventDetails.location_value)}`)} /> : null}
               </View>
             </View>
