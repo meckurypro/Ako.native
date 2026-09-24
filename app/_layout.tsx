@@ -7,6 +7,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 import { AppProviders } from "@/providers/AppProviders";
+import { BiometricLockGate } from "@/providers/BiometricLockGate";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { AccountAccessError } from "@/components/account/AccountAccessError";
@@ -30,7 +31,7 @@ function AppNavigator() {
   const access = useAccountAccess(); const accessPending = !!session && access.isLoading; const accessFailed = !!session && access.isError && !access.data; const blocked = !!session && access.data?.isBlocked === true;
   const onLayout = useCallback(() => { void SplashScreen.hideAsync(); }, []);
   const gate = blocked ? <AccountUnderReview /> : accessFailed ? <AccountAccessError onRetry={() => void access.refetch()} retrying={access.isFetching} /> : null;
-  return <View onLayout={onLayout} style={{ flex: 1, backgroundColor: colors.background }}><StatusBar style={isDark ? "light" : "dark"} />{gate ?? <ErrorBoundary><Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: "fade_from_bottom" }}><Stack.Screen name="(auth)" /><Stack.Screen name="(onboarding)" /><Stack.Screen name="(tabs)" /><Stack.Screen name="auth/callback" /><Stack.Screen name="auth/reset-password" /><Stack.Screen name="profile/edit" /><Stack.Screen name="modals/create" options={{ presentation: "transparentModal", animation: "fade", contentStyle: { backgroundColor: "transparent" } }} /><Stack.Screen name="modals/logout-confirm" options={{ presentation: "transparentModal", animation: "fade" }} /></Stack></ErrorBoundary>}{showSplash && <AppSplash ready={isReady && !accessPending} onFinished={() => setShowSplash(false)} />}</View>;
+  return <View onLayout={onLayout} style={{ flex: 1, backgroundColor: colors.background }}><StatusBar style={isDark ? "light" : "dark"} /><BiometricLockGate>{gate ?? <ErrorBoundary><Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: "fade_from_bottom" }}><Stack.Screen name="(auth)" /><Stack.Screen name="(onboarding)" /><Stack.Screen name="(tabs)" /><Stack.Screen name="auth/callback" /><Stack.Screen name="auth/reset-password" /><Stack.Screen name="profile/edit" /><Stack.Screen name="modals/create" options={{ presentation: "transparentModal", animation: "fade", contentStyle: { backgroundColor: "transparent" } }} /><Stack.Screen name="modals/logout-confirm" options={{ presentation: "transparentModal", animation: "fade" }} /></Stack></ErrorBoundary>}</BiometricLockGate>{showSplash && <AppSplash ready={isReady && !accessPending} onFinished={() => setShowSplash(false)} />}</View>;
 }
 
 export default function RootLayout() {

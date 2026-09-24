@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Avatar, Button, Input, Text } from "@/components/core";
 import { useAvatarUpload } from "@/features/profile/useAvatarUpload";
 import { friendlyAuthError, normalizeUsername } from "@/features/auth/validation";
+import { useBiometricCapability, useBiometricLockSetting } from "@/features/security/biometric";
 import {
   useBlockedList,
   useChangePassword,
@@ -149,7 +150,15 @@ function SecurityForm() {
   const [newPassword, setNewPassword] = useState("");
   const [success, setSuccess] = useState(false);
   const submit = async () => { setSuccess(false); change.reset(); if (newPassword.length < 8) return; try { await change.mutateAsync({ currentPassword, newPassword }); setCurrentPassword(""); setNewPassword(""); setSuccess(true); } catch {} };
-  return <View style={s.form}><Input label="Current password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry autoComplete="current-password" /><Input label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry autoComplete="new-password" hint="At least 8 characters." />{change.isError ? <Text color="danger" variant="caption">{change.error instanceof Error ? change.error.message : "Couldn't change your password."}</Text> : null}{success ? <Text color="accent" variant="caption">Password updated.</Text> : null}<Button label="Update password" loading={change.isPending} onPress={() => void submit()} /></View>;
+  return <View style={s.form}><Input label="Current password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry autoComplete="current-password" /><Input label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry autoComplete="new-password" hint="At least 8 characters." />{change.isError ? <Text color="danger" variant="caption">{change.error instanceof Error ? change.error.message : "Couldn't change your password."}</Text> : null}{success ? <Text color="accent" variant="caption">Password updated.</Text> : null}<Button label="Update password" loading={change.isPending} onPress={() => void submit()} /><BiometricLockSettings /></View>;
+}
+
+function BiometricLockSettings() {
+  const capability = useBiometricCapability();
+  const setting = useBiometricLockSetting();
+  if (capability.loading || setting.loading) return null;
+  if (!capability.supported) return null; // no point offering the toggle on hardware that can't do it
+  return <ToggleRow icon="scan-face" title={`Require ${capability.label}`} description={capability.enrolled ? `Lock Akọ behind ${capability.label} whenever you return to the app.` : `Set up ${capability.label} in your device settings first.`} checked={setting.enabled} pending={false} onToggle={() => void setting.setEnabled(!setting.enabled)} error={setting.enabled && !capability.enrolled ? `${capability.label} isn't set up on this device yet — this will stay off until it is.` : null} />;
 }
 
 function PrivacySettings({ profile }: { profile: any }) {
