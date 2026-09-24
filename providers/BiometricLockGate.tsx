@@ -3,7 +3,7 @@ import { type PropsWithChildren, useEffect, useRef, useState } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { BiometricLockScreen } from "@/components/security/BiometricLockScreen";
 import { PrivacyCover } from "@/components/security/PrivacyCover";
-import { readBiometricLockEnabled, useBiometricCapability } from "@/features/security/biometric";
+import { getBiometricLockEnabledSync, readBiometricLockEnabled, useBiometricCapability } from "@/features/security/biometric";
 import { useAuth } from "./AuthProvider";
 
 // A brief grace period after backgrounding, so switching to the OS app
@@ -66,7 +66,9 @@ export function BiometricLockGate({ children }: PropsWithChildren) {
       const previous = appState.current;
       appState.current = next;
       if (next.match(/inactive|background/)) {
-        backgroundedAt.current = Date.now();
+        // Keep the *first* moment we left the foreground: inactive -> background is one absence, not
+        // two, and restarting the clock on the second transition would stretch the grace period.
+        if (backgroundedAt.current === null) backgroundedAt.current = Date.now();
         setObscured(true);
         return;
       }
@@ -89,7 +91,10 @@ export function BiometricLockGate({ children }: PropsWithChildren) {
   // inactive/backgrounded so the app-switcher snapshot doesn't capture conversations. It also flashes
   // briefly behind the Face ID prompt and permission dialogs, which is expected. Android takes its
   // recents snapshot before `background` fires; blocking that needs FLAG_SECURE (expo-screen-capture).
-  const showCover = !ready || locked === null || (obscured && lockActive && !!session);
+  // The synchronous mirror wins over the state copy, which only refreshes on foreground: turning the
+  // lock on (or off) in Settings applies to the very next time the app is backgrounded.
+  const lockOn = (getBiometricLockEnabledSync() ?? lockActive) && canLock;
+  const showCover = !ready || locked === null || (obscured && lockOn && !!session);
 
   return (
     <>

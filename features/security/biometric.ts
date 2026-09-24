@@ -8,6 +8,13 @@ import * as SecureStore from "expo-secure-store";
 // since it's a security setting rather than a cosmetic one.
 const BIOMETRIC_LOCK_ENABLED_KEY = "ako-biometric-lock-enabled";
 
+// In-memory mirror of the stored setting, kept current by both the settings toggle and the async
+// read below. It lets the lock gate react in the same tick the setting changes (e.g. cover the app
+// switcher snapshot the first time the app is backgrounded after turning the lock on) instead of
+// waiting for the next foreground to re-read SecureStore. null = not loaded yet.
+let lockEnabledMirror: boolean | null = null;
+export function getBiometricLockEnabledSync(): boolean | null { return lockEnabledMirror; }
+
 export type BiometricLabel = "Face ID" | "Fingerprint" | "Biometric unlock";
 
 function labelFor(types: LocalAuthentication.AuthenticationType[]): BiometricLabel {
@@ -45,6 +52,7 @@ export function useBiometricLockSetting() {
   }, []);
   const setEnabled = useCallback(async (value: boolean) => {
     setEnabledState(value);
+    lockEnabledMirror = value;
     await SecureStore.setItemAsync(BIOMETRIC_LOCK_ENABLED_KEY, String(value));
   }, []);
   return { enabled, setEnabled, loading };
@@ -52,7 +60,9 @@ export function useBiometricLockSetting() {
 
 /** One synchronous-from-the-caller's-perspective read of the setting, for the lock gate's initial mount — see providers/BiometricLockGate.tsx. */
 export async function readBiometricLockEnabled(): Promise<boolean> {
-  return (await SecureStore.getItemAsync(BIOMETRIC_LOCK_ENABLED_KEY)) === "true";
+  const value = (await SecureStore.getItemAsync(BIOMETRIC_LOCK_ENABLED_KEY)) === "true";
+  lockEnabledMirror = value;
+  return value;
 }
 
 /** Prompts Face ID/fingerprint (falling back to device passcode, same as the OS default everywhere else). Resolves true only on a genuine success — a user cancel or a hardware error both resolve false, never throw. */
