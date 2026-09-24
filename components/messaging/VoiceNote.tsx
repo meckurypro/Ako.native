@@ -17,20 +17,27 @@ function fallbackPeaks() {
   return Array.from({ length: 30 }, (_, i) => 0.3 + ((i * 7) % 19) / 19 * 0.6);
 }
 
-type Props = { id: string; path: string; durationSec: number; peaks?: number[]; own: boolean; viewOnce?: boolean };
+type Props = { id: string; path: string; durationSec: number; peaks?: number[]; own: boolean; viewOnce?: boolean; openedOnce?: boolean; onOpenedOnce?: () => void };
 
 // Signed URLs are cached on-device (lib/media-cache.ts, backed by
 // lib/sqlite.ts's signed_urls_cache table) so scrolling a bubble in and out
 // of view, or replaying it, doesn't re-request a signed URL from Supabase
 // every time — only the first play (or once the cached URL is near its 1hr
 // expiry) actually hits the network.
-export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce }: Props) {
+export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce, openedOnce, onOpenedOnce }: Props) {
   const { colors } = useTheme();
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const player = useAudioPlayer(url, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
-  const [spent, setSpent] = useState(false);
+  // justFinished gives instant UI feedback the moment playback ends, before the
+  // opened_once_at write (see onOpenedOnce) round-trips back into the openedOnce
+  // prop via react-query's optimistic cache patch. openedOnce itself is what
+  // makes the "already opened" state survive a remount — a scroll out/in of the
+  // FlatList, backgrounding the app, or reopening the conversation later — since
+  // it's read from message_user_state, not from this component's own memory.
+  const [justFinished, setJustFinished] = useState(false);
+  const spent = !!viewOnce && !own && (!!openedOnce || justFinished);
   const [speedIndex, setSpeedIndex] = useState(0);
   const waveWidth = useRef(0);
   const restoredRef = useRef(false);
@@ -38,6 +45,7 @@ export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce }: Props
   const bars = peaks?.length ? peaks : fallbackPeaks();
 
   useEffect(() => {
+    if (spent) return; // already consumed (possibly from a prior session) — no need to sign a URL that will never play
     let alive = true;
     getSignedAudioUrl(path).then(signedUrl => {
       if (!alive) return;
@@ -45,9 +53,9 @@ export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce }: Props
       setUrl(signedUrl);
     });
     return () => { alive = false; };
-  }, [path]);
+  }, [path, spent]);
 
-  useEffect(() => { if (viewOnce && !own && status.didJustFinish) setTimeout(() => setSpent(true), 0); }, [own, status.didJustFinish, viewOnce]);
+  useEffect(() => { if (viewOnce && !own && status.didJustFinish && !spent) { setJustFinished(true); onOpenedOnce?.(); } }, [own, status.didJustFinish, viewOnce, spent, onOpenedOnce]);
 
   // Resume from where the listener left off, once, right after the player loads.
   useEffect(() => {
@@ -96,7 +104,7 @@ export function VoiceNote({ id, path, durationSec, peaks, own, viewOnce }: Props
     player.setPlaybackRate(SPEEDS[next]);
   };
 
-  if (viewOnce && spent && !own) return <View style={s.spent}><Icon name="eye-off" size={16} color={colors.textMuted} /><Text color="muted" style={s.spentText}>Opened</Text></View>;
+  if (spent) return <View style={s.spent}><Icon name="eye-off" size={16} color={colors.textMuted} /><Text color="muted" style={s.spentText}>Opened</Text></View>;
 
   return (
     <View style={s.root}>
