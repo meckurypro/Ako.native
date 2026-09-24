@@ -8,7 +8,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Avatar, MediaViewer, Text, VerifiedBadge } from "@/components/core";
 import { TierBadge } from "@/components/profile/TierBadge";
 import { PostCard } from "@/components/feed/PostCard";
-import { ErrorState, Skeleton } from "@/components/feedback";
+import { ErrorState, OfflineState, Skeleton } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 import { useIdentityPosts, useProfile, useProfileMedia } from "@/features/discovery/api";
 import { useSavedAccounts, useSwitchAccount } from "@/features/account/switcher";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +38,7 @@ export default function ProfileScreen() {
   // eslint-disable-next-line react-hooks/immutability
   const onScroll = useAnimatedScrollHandler({ onScroll: event => { const y = Math.max(0, event.contentOffset.y); const delta = y - lastY.value; lastY.value = y; scrollY.value = y; if (y <= 8) { if (chromeProgress.value) chromeProgress.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) }); } else if (delta > 6 && chromeProgress.value === 0) chromeProgress.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) }); else if (delta < -6 && chromeProgress.value === 1) chromeProgress.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) }); const next = y > 480; if (next !== showTopValue.value) { showTopValue.value = next; runOnJS(setShowTop)(next); } } });
   const refresh = () => { void profileQuery.refetch(); if (tab === "posts") void posts.refetch(); else void media.refetch(); };
+  if (getScreenState(profileQuery) === "offline") return <View style={[styles.root, { backgroundColor: colors.background }]}><OfflineState onRetry={() => void profileQuery.refetch()} /></View>;
   if (profileQuery.isLoading) return <View style={[styles.root, styles.loading, { backgroundColor: colors.background }]}><Skeleton height={170}/><Skeleton height={310}/></View>;
   if (profileQuery.isError || !person) return <View style={[styles.root, { backgroundColor: colors.background }]}><ErrorState message="Couldn't load your profile." onRetry={() => void profileQuery.refetch()}/></View>;
   const rows: Row[] = [{ type: "identity" }, { type: "tabs" }, ...(tab === "posts" ? postRows.map(post => ({ type: "post" as const, id: post.id, post })) : (media.data ?? []).map(item => ({ type: "media" as const, id: item.id, item })) )];

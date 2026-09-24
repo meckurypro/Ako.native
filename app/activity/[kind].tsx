@@ -10,6 +10,8 @@ import { Text } from "@/components/core";
 import { PostCard } from "@/components/feed/PostCard";
 import { useAffiliateDashboard, useAffiliateProjects, useDraftPosts, useEventsActivity, useLikedPosts, useLikedProjects, useSavedPosts, useSavedProjects, useViewHistory } from "@/features/activity/api";
 import { useTheme } from "@/providers/ThemeProvider";
+import { OfflineState } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 
 type HubTab = "posts" | "projects";
 
@@ -37,38 +39,38 @@ export default function ActivityDetail() {
     const loading = hubTab === "posts" ? postQuery.isLoading : projectQuery.isLoading;
     const refreshing = hubTab === "posts" ? postQuery.isRefetching : projectQuery.isRefetching;
     const title = kind === "saved" ? "Saved" : "Liked";
-    return <View style={[s.root, { backgroundColor: colors.background }]}><HubHeader title={title} tab={hubTab} onChange={setHubTab} />{loading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={data} keyExtractor={(item: any, index) => item.id ?? `${index}`} contentContainerStyle={s.savedList} ItemSeparatorComponent={() => <View style={{ height: 14 }} />} refreshing={refreshing} onRefresh={() => { void postQuery.refetch(); void projectQuery.refetch(); }} ListEmptyComponent={<Text color="muted" align="center" style={s.empty}>{hubTab === "posts" ? `Nothing ${kind} yet.` : `No ${kind} projects yet.`}</Text>} renderItem={({ item }: any) => hubTab === "posts" ? <HubPostCard post={item} showDelete={kind === "saved"} /> : <ProjectRow item={item} kind={kind} />} /> }<BottomNavigation /></View>;
+    return <View style={[s.root, { backgroundColor: colors.background }]}><HubHeader title={title} tab={hubTab} onChange={setHubTab} />{(hubTab === "posts" ? getScreenState(postQuery) : getScreenState(projectQuery)) === "offline" ? <OfflineState onRetry={() => void (hubTab === "posts" ? postQuery : projectQuery).refetch()} /> : loading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={data} keyExtractor={(item: any, index) => item.id ?? `${index}`} contentContainerStyle={s.savedList} ItemSeparatorComponent={() => <View style={{ height: 14 }} />} refreshing={refreshing} onRefresh={() => { void postQuery.refetch(); void projectQuery.refetch(); }} ListEmptyComponent={<Text color="muted" align="center" style={s.empty}>{hubTab === "posts" ? `Nothing ${kind} yet.` : `No ${kind} projects yet.`}</Text>} renderItem={({ item }: any) => hubTab === "posts" ? <HubPostCard post={item} showDelete={kind === "saved"} /> : <ProjectRow item={item} kind={kind} />} /> }<BottomNavigation /></View>;
   }
 
   if (kind === "drafts") {
     const rows = drafts.data ?? [];
-    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="Drafts" />{drafts.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={rows} keyExtractor={(item: any) => item.id} contentContainerStyle={s.draftList} ItemSeparatorComponent={() => <View style={{ height: 12 }} />} refreshing={drafts.isRefetching} onRefresh={() => void drafts.refetch()} ListEmptyComponent={<DraftEmpty />} renderItem={({ item }: any) => <DraftCard draft={item} />} />}</View>;
+    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="Drafts" />{getScreenState(drafts) === "offline" ? <OfflineState onRetry={() => void drafts.refetch()} /> : drafts.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={rows} keyExtractor={(item: any) => item.id} contentContainerStyle={s.draftList} ItemSeparatorComponent={() => <View style={{ height: 12 }} />} refreshing={drafts.isRefetching} onRefresh={() => void drafts.refetch()} ListEmptyComponent={<DraftEmpty />} renderItem={({ item }: any) => <DraftCard draft={item} />} />}</View>;
   }
 
   if (kind === "scheduled") {
     const rows = drafts.data ?? [];
-    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="Scheduled" />{drafts.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={rows} keyExtractor={(item: any) => item.id} contentContainerStyle={s.draftList} ItemSeparatorComponent={() => <View style={{ height: 12 }} />} refreshing={drafts.isRefetching} onRefresh={() => void drafts.refetch()} ListEmptyComponent={<ScheduledEmpty />} renderItem={({ item }: any) => <ScheduledCard post={item} />} />}</View>;
+    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="Scheduled" />{getScreenState(drafts) === "offline" ? <OfflineState onRetry={() => void drafts.refetch()} /> : drafts.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={rows} keyExtractor={(item: any) => item.id} contentContainerStyle={s.draftList} ItemSeparatorComponent={() => <View style={{ height: 12 }} />} refreshing={drafts.isRefetching} onRefresh={() => void drafts.refetch()} ListEmptyComponent={<ScheduledEmpty />} renderItem={({ item }: any) => <ScheduledCard post={item} />} />}</View>;
   }
 
   if (kind === "history") {
     const rows = history.data ?? [];
-    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="History" />{history.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={rows} keyExtractor={(item: any, index) => `${item.kind}-${item.value?.id ?? index}-${item.viewedAt}`} contentContainerStyle={s.historyList} refreshing={history.isRefetching} onRefresh={() => void history.refetch()} ListEmptyComponent={<HistoryEmpty />} renderItem={({ item }: any) => <HistoryRow item={item} />} /> }<BottomNavigation /></View>;
+    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="History" />{getScreenState(history) === "offline" ? <OfflineState onRetry={() => void history.refetch()} /> : history.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={rows} keyExtractor={(item: any, index) => `${item.kind}-${item.value?.id ?? index}-${item.viewedAt}`} contentContainerStyle={s.historyList} refreshing={history.isRefetching} onRefresh={() => void history.refetch()} ListEmptyComponent={<HistoryEmpty />} renderItem={({ item }: any) => <HistoryRow item={item} />} /> }<BottomNavigation /></View>;
   }
 
   if (kind === "events") {
     const rows = events.data ?? [];
     const upcoming = rows.filter((item: any) => !item.when || new Date(item.when).getTime() >= now);
     const past = rows.filter((item: any) => item.when && new Date(item.when).getTime() < now);
-    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="Events & meetings" />{events.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : rows.length === 0 ? <EventsEmpty /> : <FlatList data={[{ key: "upcoming", title: "Upcoming", rows: upcoming }, { key: "past", title: "Past", rows: past }]} keyExtractor={(section) => section.key} contentContainerStyle={s.eventsList} renderItem={({ item: section }) => <EventSection title={section.title} rows={section.rows} />} /> }<BottomNavigation /></View>;
+    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="Events & meetings" />{getScreenState(events) === "offline" ? <OfflineState onRetry={() => void events.refetch()} /> : events.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : rows.length === 0 ? <EventsEmpty /> : <FlatList data={[{ key: "upcoming", title: "Upcoming", rows: upcoming }, { key: "past", title: "Past", rows: past }]} keyExtractor={(section) => section.key} contentContainerStyle={s.eventsList} renderItem={({ item: section }) => <EventSection title={section.title} rows={section.rows} />} /> }<BottomNavigation /></View>;
   }
 
   if (kind === "affiliates") {
     const rows = affiliates.data ?? [];
-    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="My affiliate links" />{affiliates.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={rows} keyExtractor={(item: any) => item.id} contentContainerStyle={s.affiliateList} ListEmptyComponent={<AffiliateEmpty />} renderItem={({ item }: any) => item.project ? <AffiliateCard relationship={item} /> : null} />}</View>;
+    return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader title="My affiliate links" />{getScreenState(affiliates) === "offline" ? <OfflineState onRetry={() => void affiliates.refetch()} /> : affiliates.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={rows} keyExtractor={(item: any) => item.id} contentContainerStyle={s.affiliateList} ListEmptyComponent={<AffiliateEmpty />} renderItem={({ item }: any) => item.project ? <AffiliateCard relationship={item} /> : null} />}</View>;
   }
 
   const projects: any[] = kind === "affiliates" ? affiliates.data?.map((x: any) => x.project).filter(Boolean) ?? [] : [];
-  return <View style={[s.root, { backgroundColor: colors.background }]}><View style={[s.header, { borderBottomColor: colors.border }]}><Pressable onPress={() => router.back()} style={s.back}><Icon name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.title}>{titles[kind] ?? "Activity"}</Text></View>{affiliates.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={projects} keyExtractor={(item: any, index) => item.id ?? `${index}`} contentContainerStyle={s.list} ItemSeparatorComponent={() => <View style={{ height: 14 }} />} ListEmptyComponent={<Text color="muted" align="center" style={s.empty}>Nothing here yet.</Text>} renderItem={({ item }: any) => <ProjectRow item={item.value ?? item} kind={kind ?? ""} />} />}</View>;
+  return <View style={[s.root, { backgroundColor: colors.background }]}><View style={[s.header, { borderBottomColor: colors.border }]}><Pressable onPress={() => router.back()} style={s.back}><Icon name="arrow-left" size={22} color={colors.textSecondary} /></Pressable><Text style={s.title}>{titles[kind] ?? "Activity"}</Text></View>{getScreenState(affiliates) === "offline" ? <OfflineState onRetry={() => void affiliates.refetch()} /> : affiliates.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : <FlatList data={projects} keyExtractor={(item: any, index) => item.id ?? `${index}`} contentContainerStyle={s.list} ItemSeparatorComponent={() => <View style={{ height: 14 }} />} ListEmptyComponent={<Text color="muted" align="center" style={s.empty}>Nothing here yet.</Text>} renderItem={({ item }: any) => <ProjectRow item={item.value ?? item} kind={kind ?? ""} />} />}</View>;
 }
 
 function PlainHeader({ title }: { title: string }) {

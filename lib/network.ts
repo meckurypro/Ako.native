@@ -1,6 +1,19 @@
 // File: lib/network.ts
 import { createContext, createElement, useContext, useEffect, useState, type PropsWithChildren } from "react";
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
+import { env } from "./env";
+
+// NetInfo's default reachability probe is a Google endpoint. What matters to this app is whether
+// Ako's own backend answers, so probe that: any HTTP response below 500 means it is reachable.
+// (Wi-Fi with no data and captive portals then read as offline; so does a blocked Google.)
+NetInfo.configure({
+  reachabilityUrl: `${env.supabaseUrl}/auth/v1/health`,
+  reachabilityMethod: "GET",
+  reachabilityTest: async (response) => response.status > 0 && response.status < 500,
+  reachabilityShortTimeout: 5 * 1000,
+  reachabilityLongTimeout: 30 * 1000,
+  reachabilityRequestTimeout: 15 * 1000,
+});
 
 export type NetworkStatus = { isConnected: boolean; isInternetReachable: boolean | null };
 
@@ -39,6 +52,11 @@ export function onNetworkReconnect(callback: () => void) {
     if (wasOffline && !offline) callback();
     wasOffline = offline;
   });
+}
+
+/** Re-runs the reachability probe now (used by the "Try again" button on offline screens). */
+export async function refreshNetworkStatus(): Promise<void> {
+  await NetInfo.refresh().catch(() => undefined);
 }
 
 /** One-shot check, for call sites that just need to know "can I hit the network right now?" without subscribing. */

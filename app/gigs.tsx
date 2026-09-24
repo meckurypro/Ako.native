@@ -7,6 +7,8 @@ import Svg, { Path, Rect } from "react-native-svg";
 import { Text } from "@/components/core";
 import { type MyGig, useMyGigs } from "@/features/projects/api";
 import { useTheme } from "@/providers/ThemeProvider";
+import { OfflineState } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 
 const STATUS_LABEL: Record<string, string> = { draft: "Draft", archived: "Archived", cancelled: "Cancelled" };
 const SOURCE_LABEL: Record<MyGig["source"], string> = { manual: "Created manually", auto_project: "Started from a project", auto_collaboration: "Started from a collaboration" };
@@ -32,7 +34,7 @@ export default function GigsScreen() {
   const { colors } = useTheme();
   const gigs = useMyGigs();
   const sections = groupGigs(gigs.data ?? []);
-  return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader />{gigs.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : sections.length === 0 ? <GigsEmpty /> : <FlatList data={sections} keyExtractor={(item) => item.key} contentContainerStyle={s.list} renderItem={({ item }) => <GigSection section={item} />} /> }<BottomNavigation /></View>;
+  return <View style={[s.root, { backgroundColor: colors.background }]}><PlainHeader />{getScreenState(gigs) === "offline" ? <OfflineState onRetry={() => void gigs.refetch()} /> : gigs.isLoading ? <ActivityIndicator color={colors.accent} style={s.loader} /> : sections.length === 0 ? <GigsEmpty /> : <FlatList data={sections} keyExtractor={(item) => item.key} contentContainerStyle={s.list} renderItem={({ item }) => <GigSection section={item} />} /> }<BottomNavigation /></View>;
 }
 
 function PlainHeader() {

@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Easing, runOnJS, useAnimatedStyle, withTiming, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/core";
-import { EmptyState, ErrorState } from "@/components/feedback";
+import { EmptyState, ErrorState, OfflineState } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 import { FeedSkeleton } from "@/components/feed/FeedSkeleton";
 import { PostCard } from "@/components/feed/PostCard";
 import { FeedSwipeGestureContext } from "@/components/feed/FeedSwipeGesture";
@@ -43,6 +44,7 @@ const FeedPane = memo(function FeedPane({ mode, interestId, nativeGesture }: { m
     prefetchImages(lastPage.flatMap(post => [post.author.avatar_url, post.posted_as_page?.avatar_url ?? null, post.media_urls[0] ?? null]));
   }, [feed.data, pageCount]);
   const empty = mode === "following" ? "No posts from people you follow yet. Follow a few people to see their posts here." : mode === "top" ? "Nothing's picked up much discussion in the last week yet." : "No posts yet. Be the first to share a thought.";
+  if (getScreenState(feed) === "offline" && !posts.length) return <OfflineState onRetry={() => void feed.refetch()} />;
   if (feed.isLoading && !posts.length) return <FeedSkeleton />;
   if (feed.isError && !posts.length) return <ErrorState message="Couldn't load your feed." onRetry={() => void feed.refetch()} />;
   // Wrapping the list's own native scroll/RefreshControl gesture and declaring
