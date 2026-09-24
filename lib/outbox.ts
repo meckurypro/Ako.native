@@ -71,4 +71,7 @@ function reconcileLocalMessage(conversationId: string, localId: string, serverMe
   );
   void cacheMessages(conversationId, [serverMessage]);
   void queryClient.invalidateQueries({ queryKey: ["mobile-conversations"] });
+  // Same call features/messaging/api.ts's notifyPush makes — inlined rather than
+  // imported, since that module imports this one (import cycle).
+  void supabase.functions.invoke("send-message-push", { body: { message_id: serverMessage.id } }).catch((error) => console.warn("send-message-push failed", error));
 }

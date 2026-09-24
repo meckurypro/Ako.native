@@ -7,6 +7,7 @@ import { createSQLitePersister } from "@/lib/query-persister";
 import { NetworkProvider, onNetworkReconnect } from "@/lib/network";
 import { flushOutbox } from "@/lib/outbox";
 import { primeVoicePlaybackPositions } from "@/features/messaging/voicePlaybackPosition";
+import { usePushRegistration } from "@/features/notifications/push";
 import { AuthProvider } from "./AuthProvider";
 import { ThemeProvider } from "./ThemeProvider";
 import type { PropsWithChildren } from "react";
@@ -30,6 +31,14 @@ function OutboxSync() {
   return null;
 }
 
+// Registers the device's Expo push token whenever a user is signed in, and
+// deep-links into a conversation when a message notification is tapped.
+// See features/notifications/push.ts.
+function PushSync() {
+  usePushRegistration();
+  return null;
+}
+
 export function AppProviders({ children }: PropsWithChildren) {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -42,6 +51,7 @@ export function AppProviders({ children }: PropsWithChildren) {
             <ThemeProvider>
               <AuthProvider>
                 <OutboxSync />
+                <PushSync />
                 {children}
               </AuthProvider>
             </ThemeProvider>
