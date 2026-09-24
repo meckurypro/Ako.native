@@ -7,7 +7,8 @@ import Animated, { interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedSt
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
 import { Avatar, FacebookGlyph, MediaViewer, Text, VerifiedBadge, WhatsAppGlyph, XGlyph } from "@/components/core";
-import { ConfirmDialog, ErrorState, Skeleton } from "@/components/feedback";
+import { ConfirmDialog, ErrorState, OfflineState, Skeleton } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 import { PostCard } from "@/components/feed/PostCard";
 import { TierBadge } from "@/components/profile/TierBadge";
 import { type Person, type ProfileMedia, useFollowState, useIdentityPosts, useProfile, useProfileMedia, useToggleFollow } from "@/features/discovery/api";
@@ -100,6 +101,7 @@ export default function PublicProfileScreen() {
     },
   });
 
+  if (getScreenState(profile) === "offline") return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><OfflineState onRetry={() => void profile.refetch()} /></SafeAreaView>;
   if (profile.isLoading) return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><View style={s.loading}><Skeleton height={220} /><Skeleton height={360} /></View></SafeAreaView>;
   if (profile.isError || !person) return <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}><ErrorState message="Profile unavailable." onRetry={() => void profile.refetch()} /></SafeAreaView>;
 

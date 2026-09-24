@@ -154,6 +154,11 @@ export async function getPendingOutboxCount(conversationId: string): Promise<num
   return row?.count ?? 0;
 }
 
+export async function getTotalPendingOutboxCount(): Promise<number> {
+  const row = await safeDb((db) => db.getFirstAsync<{ count: number }>("SELECT COUNT(*) as count FROM outbox;"));
+  return row?.count ?? 0;
+}
+
 export async function getPendingOutboxPostCount(): Promise<number> {
   const row = await safeDb((db) => db.getFirstAsync<{ count: number }>("SELECT COUNT(*) as count FROM outbox WHERE kind = 'post';"));
   return row?.count ?? 0;

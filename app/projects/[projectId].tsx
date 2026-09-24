@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Avatar, Icon, PressableScale, Screen, Text, VerifiedBadge, type IconName } from "@/components/core";
-import { ErrorState, Skeleton } from "@/components/feedback";
+import { ErrorState, OfflineState, Skeleton } from "@/components/feedback";
+import { getScreenState } from "@/lib/screenState";
 import { FaqList, ProjectFaqSection } from "@/components/projects/ProjectFaqSection";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { ProjectMiniCard, ProjectRail } from "@/components/projects/ProjectMiniCard";
@@ -98,7 +99,9 @@ export default function ProjectDetailScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={goBack} hitSlop={8} style={[s.back, { backgroundColor: colors.surface, borderColor: colors.border }]}><Icon name="arrow-left" size={20} color={colors.textSecondary} /></Pressable>
       </View>
 
-      {detail.isLoading ? (
+      {getScreenState(detail) === "offline" ? (
+        <OfflineState onRetry={() => void detail.refetch()} />
+      ) : detail.isLoading ? (
         <View style={{ gap: 12 }}><Skeleton height={200} radius={28} /><Skeleton width="70%" height={24} /><Skeleton height={16} /><Skeleton width="85%" height={16} /></View>
       ) : detail.isError || !project ? (
         <ErrorState message="This project may have been removed, or you may not have access to it." onRetry={() => void detail.refetch()} />
