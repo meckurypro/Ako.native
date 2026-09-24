@@ -172,6 +172,6 @@ export function AppSplash({ ready, onFinished }: { ready: boolean; onFinished: (
 
 const styles = StyleSheet.create({
   shell: { zIndex: 1000 },
-  center: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  center: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   glow: { position: "absolute" },
 });
