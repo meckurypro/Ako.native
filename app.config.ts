@@ -56,14 +56,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       "expo-notifications",
       {
-        // No custom sound bundled yet (placeholders are being replaced) — omit
-        // `sounds` entirely so the platform default chime is used until real
-        // assets land, rather than shipping a placeholder into production.
-        // Same for `icon`: Android wants a flat white silhouette (not the
-        // full-color app icon) or it renders as a white square — that asset
-        // doesn't exist yet, so this falls back to the adaptive icon rather
-        // than referencing a file that isn't there.
+        // Android small icon: must be a flat white silhouette on transparent, or Android renders it as
+        // a plain white square. 96x96 "k" cut from the wordmark — see assets/images.
+        icon: "./assets/images/notification-icon.png",
         color: "#0B1A15",
+        // Bundled into the iOS app and Android res/raw (names: lowercase/digits/underscores only, per
+        // Android's raw-resource rules). Replace the files in assets/sounds (same names) to change the
+        // sounds — see its README. Android also needs a channel that references them by name:
+        // lib/notification-channels.ts, created before the first permission prompt.
+        sounds: ["./assets/sounds/ako_message.wav", "./assets/sounds/ako_activity.wav"],
       },
     ],
     [

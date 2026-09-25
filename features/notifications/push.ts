@@ -9,6 +9,7 @@ import { AppState, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { File, Paths } from "expo-file-system";
+import { ensureNotificationChannels } from "@/lib/notification-channels";
 import { ensurePermission } from "@/lib/permissions";
 import { useAuth } from "@/providers/AuthProvider";
 import { isNotificationsOptedOut } from "./settings";
@@ -47,10 +48,8 @@ async function registerToken(userId: string, allowPrompt: boolean) {
   if (Platform.OS === "web") return; // push_tokens.platform is constrained to ios/android; no push support on web anyway
   if (await isNotificationsOptedOut()) return; // explicit "off" from Settings (features/notifications/settings.ts) — don't silently re-register
   try {
-    // Android 13+ only shows the permission prompt once a notification channel exists, so create it first.
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", { name: "Default", importance: Notifications.AndroidImportance.DEFAULT });
-    }
+    // Android 13+ only shows the permission prompt once a notification channel exists, so create them first.
+    await ensureNotificationChannels();
 
     const current = await Notifications.getPermissionsAsync();
     let granted = current.granted;
