@@ -19,9 +19,8 @@
 // index comments_author_client_request_id_key, which also settles two concurrent identical requests:
 // the loser gets 23505 and returns the winner's row. Requests without the field behave exactly as
 // before.
-// Requires migration 20260924120000_comments_client_request_id.sql to be applied first.
-//
-// This file is the deployed function (version 8) plus the change above, so the repo holds its source.
+// Migration 20260924120000_comments_client_request_id.sql has been applied, and this file is
+// deployed as version 9 — the repo now matches what's live.
 //
 // Deploy: supabase functions deploy create-comment
 // Secrets required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
